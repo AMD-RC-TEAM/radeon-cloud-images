@@ -15,7 +15,10 @@ RUN pip install --no-cache-dir --no-deps -r /tmp/requirements.txt \
  && pip install --no-cache-dir /opt/rocm/share/amd_smi \
  && (pip check | grep -v -i -E "torch|triton|rocm" > /opt/pip-check.txt || true)
 
-ENV SGLANG_USE_AITER=0 \
+# SGLang 0.5.23 imports aiter unconditionally on ROCm (quark MXFP4 schemes); the RDNA3 plugin then stubs the
+# CDNA-only aiter kernels. aiter is installed for that import only; SGLANG_USE_AITER=0 keeps its kernels off.
+ENV GPU_ARCHS=gfx1100 \
+    SGLANG_USE_AITER=0 \
     MIOPEN_FIND_MODE=FAST \
     PYTORCH_ALLOC_CONF=expandable_segments:True
 
