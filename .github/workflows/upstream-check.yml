@@ -3,7 +3,7 @@ name: upstream-check
 on:
   schedule: [{cron: "17 1 * * *"}]
   workflow_dispatch: {}
-permissions: {contents: write, pull-requests: write}
+permissions: {contents: write, issues: write}
 jobs:
   check:
     runs-on: ubuntu-latest
@@ -17,5 +17,7 @@ jobs:
           b=bot/upstream-$(date -u +%Y%m%d)
           git config user.name "radeon-images-bot"; git config user.email "radeon-images-bot@users.noreply.github.com"
           git checkout -B "$b"; git commit -am "${{ steps.c.outputs.title }}"; git push -f origin "$b"
-          gh pr list --head "$b" --json number -q '.[0].number' | grep -q . || \
-            gh pr create --head "$b" --title "${{ steps.c.outputs.title }}" --body "上游有新版本。合入即发布：构建/镜像 → W7900D 冒烟 → 更新目录稳定行（GT → Global → 中国站）。请先看上游 release notes。"
+          url="${{ github.server_url }}/${{ github.repository }}/compare/main...$b?expand=1"
+          # The org does not let Actions open PRs, so the bot pushes the branch and files an issue with the one-click link.
+          gh issue list -S "\"$b\" in:body" --json number -q '.[0].number' | grep -q . || \
+            gh issue create --title "${{ steps.c.outputs.title }}" --body "上游有新版本，升级分支 \`$b\` 已推送。点这里开 PR：$url 。合入即发布：镜像 → W7900D 冒烟 → 更新目录稳定行（GT → Global → 中国站）。请先看上游 release notes。"

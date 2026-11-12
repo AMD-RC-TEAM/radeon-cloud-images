@@ -15,7 +15,7 @@ tools/
   ci/slot_pool.py    # 和 RCI CI 共用的 GPU 槽位租约（从 RCI 复制，需保持一致）
 .github/workflows/
   release.yml        # main 上 images/** 有变化就发布
-  upstream-check.yml # 每天检查上游；有新版本由 bot 开升级 PR（不直接改目录）
+  upstream-check.yml # 每天检查上游；有新版本由 bot 推升级分支并开 issue（附一键开 PR 链接；组织不允许 Actions 直接开 PR）
   rollback.yml       # 手动一键回滚
 ```
 
@@ -45,7 +45,7 @@ Actions → rollback → 填 image 和 sites：`rc-current` 指回 `rc-prev`，�
 集群内一个只服务本仓库的 runner（label `radeon-images`，`amd-oneclick-ci-runners` 命名空间，用 `gh-runner` 服务账号，所以有 CI 槽位租约和槽位命名空间的权限）。注册只用一次性的 registration token，集群里只保存 runner 自己的凭据，不存 PAT。
 
 ## 分支保护（main）
-需要 1 个 CODEOWNERS 批准；不允许直接推送，管理员也不例外；需要通过 `plan` 检查；禁止强推和删除分支。
+需要 1 个 CODEOWNERS 批准，旧的批准在有新提交后作废；不允许直接推送，管理员也不例外；禁止强推和删除分支（已在 11-12 设置）。
 
 ## 状态
 首批：PyTorch 稳定版、PyTorch 最新版、vLLM。第二批：Base、Unsloth、SGLang+hk-dsl（hk-B）。llama.cpp、ComfyUI 后续再加。
