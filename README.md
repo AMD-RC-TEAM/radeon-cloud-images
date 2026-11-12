@@ -69,8 +69,13 @@ The digest that was rolled back stays tagged `rc-rolled-back`.
 - **Upgrade:** change the tag@digest on the Dockerfile's first line and the `FROM` digest (the daily bot prepares
   this branch for you), read the upstream release notes, merge.
 - **New image:** add `images/<name>/` with the three files, after rc-ux has created a stable row in Admin that
-  tracks `rc/<category>:rc-current`. Dockerfiles with RUN/COPY steps will be built with Kaniko (second batch;
-  SGLang+hk-dsl comes as a PR from hk-B).
+  tracks `rc/<category>:rc-current`.
+- **Images with build steps** (RUN/COPY, for example `sglang`) are built with Kaniko in the runner namespace, with
+  no GPU, into `build/<name>:ctx-<hash of the build context>`. Files other than `image.yaml` and `smoke.sh` are the
+  context. A context that was already built (by the PR check) is reused on release, so the release ships exactly the
+  digest that passed the smoke. pip uses a PyPI mirror reachable from the cluster (passed as the `PIP_INDEX_URL`
+  build argument; declare `ARG PIP_INDEX_URL` in the Dockerfile); smoke Jobs get `HF_ENDPOINT` pointing at a
+  Hugging Face mirror.
 
 ## Credentials (never in GitHub)
 Only one, kept as a k8s Secret in the runner namespace `amd-oneclick-ci-runners` and copied to `$RUNNER_TEMP` at run
@@ -95,5 +100,5 @@ pushes, admins included; no force pushes or branch deletion. GitHub does not let
   the bot and **the owner can approve** directly.
 
 ## Status
-First batch: PyTorch stable, PyTorch latest, vLLM. Second batch: Base, Unsloth, SGLang+hk-dsl (hk-B).
+First batch: PyTorch stable, PyTorch latest, vLLM. Second batch: SGLang (built, without hk-dsl while hk-dsl is paused), Base, Unsloth.
 llama.cpp and ComfyUI later.

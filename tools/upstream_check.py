@@ -27,9 +27,34 @@ def version_key(tag):
     return [int(x) for x in re.findall(r"\d+", tag)]
 
 
+def pypi_latest(name):
+    with urllib.request.urlopen(f"https://pypi.org/pypi/{name}/json", timeout=60) as r:
+        return json.load(r)["info"]["version"]
+
+
+def watch_notices():
+    """image.yaml `watch_pypi: <package>`: report when PyPI has a newer release than requirements.txt pins.
+    These need a human (for SGLang: pick the SGLang commit the new plugin supports), so they become an issue, not a branch."""
+    out = []
+    for image in sorted(os.listdir(os.path.join(ROOT, "images"))):
+        d = os.path.join(ROOT, "images", image)
+        m = re.search(r"^watch_pypi:\s*(\S+)", open(os.path.join(d, "image.yaml")).read(), re.M)
+        req = os.path.join(d, "requirements.txt")
+        if not m or not os.path.exists(req):
+            continue
+        pkg = m.group(1)
+        pin = re.search(rf"^{re.escape(pkg)}==(\S+)", open(req).read(), re.M | re.I)
+        latest = pypi_latest(pkg)
+        if pin and version_key(latest) > version_key(pin.group(1)):
+            out.append(f"{image}: {pkg} {pin.group(1)} -> {latest} on PyPI")
+        print(f"{image}: watch {pkg} pinned {pin.group(1) if pin else '?'}, PyPI {latest}")
+    return out
+
+
 def main():
     write = "--write" in sys.argv
     changes = []
+    notices = watch_notices()
     for image in sorted(os.listdir(os.path.join(ROOT, "images"))):
         d = os.path.join(ROOT, "images", image)
         y = open(os.path.join(d, "image.yaml")).read()
@@ -48,6 +73,9 @@ def main():
         if write:
             df = df.replace(f":{cur.group(1)}@{cur.group(2)}", f":{best[0]}@{best[1]}").replace(f"@{cur.group(2)}", f"@{best[1]}")
             open(dfp, "w").write(df)
+    if notices and os.environ.get("GITHUB_OUTPUT"):
+        with open(os.environ["GITHUB_OUTPUT"], "a") as f:
+            f.write("notice=" + "; ".join(notices)[:300] + "\n")
     if changes and os.environ.get("GITHUB_OUTPUT"):
         with open(os.environ["GITHUB_OUTPUT"], "a") as f:
             f.write("changed=true\n")

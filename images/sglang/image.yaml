@@ -1,0 +1,10 @@
+# Release settings for this image (read by tools/release.py and tools/upstream_check.py).
+name: sglang
+rc_repo: rc/sglang               # Harbor: 10.5.10.12:1808/radeon-cloud-global/rc/sglang:rc-current is what the catalog stable row tracks
+catalog_row: "SGLang"           # the stable catalog row only; template rows are never touched
+smoke: sglang                 # which smoke profile images/sglang/smoke.sh runs (see README)
+upstream:
+  registry: docker.io
+  repo: rocm/pytorch
+  tag_regex: '^rocm7\.2\.[0-9]+_ubuntu24\.04_py3\.12_pytorch_release_2\.10\.[0-9]+$'         # base updates only within the ROCm 7.2 / PyTorch 2.10 line the pins were validated on
+watch_pypi: sglang-radeon-rdna3   # a newer plugin release may support newer SGLang: the bot opens an issue (SGLang commit is chosen by hand)

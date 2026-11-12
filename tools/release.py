@@ -5,16 +5,22 @@
 
 Inputs: images/<image>/{Dockerfile,image.yaml,smoke.sh}. Harbor creds via $DOCKER_CONFIG (k8s Secret on the runner).
 Nothing secret is printed. CI stops at rc-current: the catalog rows that track rc-current are updated outside CI.
-A FROM-only Dockerfile is released as the mirrored upstream image itself (same digest); Dockerfiles with build
-steps are built with Kaniko in the slot namespace (not in the first batch).
+A FROM-only Dockerfile is released as the mirrored upstream image itself (same digest). A Dockerfile with build
+steps is built with Kaniko in the runner namespace (no GPU) into build/<image>:ctx-<hash of the build context>; a
+context that was already built (for example by the PR check) is reused, so the release ships the digest that passed
+the smoke.
 """
-import argparse, json, os, re, subprocess, sys, time, tempfile
+import argparse, hashlib, io, json, os, re, subprocess, sys, tarfile, time, tempfile
 sys.path.insert(0, os.path.dirname(__file__))
 import harbor  # noqa: E402
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 PULL = "10.5.10.12:1808/radeon-cloud-global"
 PUSH = "36.150.116.202:1808/radeon-cloud-global"
+BUILD_NS = "amd-oneclick-ci-runners"
+KANIKO = PULL + "/kaniko-project/executor@sha256:8a4f9af8ef55ef8bfaf4cfd7b15dc956609e14a4402efefd5fb2e49a0c06e2c8"  # v1.23.2
+PIP_INDEX = "https://mirrors.aliyun.com/pypi/simple/"   # pypi.org is not reachable from the cluster
+HF_ENDPOINT = "https://hf-mirror.com"                   # huggingface.co is not reachable either
 
 
 def sh(*cmd, check=True, **kw):
@@ -52,6 +58,80 @@ def ensure_mirror(m):
     r = subprocess.run([os.path.join(ROOT, "tools", "mirror.sh"), m["repo"], m["digest"], out, target], text=True)
     if r.returncode or not harbor.artifact(m["mirror_repo"], m["digest"]):
         raise SystemExit("mirror failed or digest not in Harbor afterwards")
+
+
+def context_files(m):
+    """Everything in the image directory except the release settings and the smoke script."""
+    return sorted(f for f in os.listdir(m["dir"]) if f not in ("image.yaml", "smoke.sh")
+                  and os.path.isfile(os.path.join(m["dir"], f)))
+
+
+def context_tag(m):
+    h = hashlib.sha256()
+    for f in context_files(m):
+        h.update(f.encode() + b"\0" + open(os.path.join(m["dir"], f), "rb").read() + b"\0")
+    return "ctx-" + h.hexdigest()[:20]
+
+
+def build(m):
+    """Build the image with Kaniko, or reuse an earlier build of the same context. Returns (repo, digest)."""
+    repo, tag = f"build/{m['name']}", context_tag(m)
+    done = harbor.artifact(repo, tag)
+    if done:
+        print(f"build: {repo}:{tag} already built ({done['digest'][:19]}), reusing it")
+        return repo, done["digest"]
+    name = f"rcimg-build-{m['name']}-{int(time.time())}"[:62]
+    buf = io.BytesIO()
+    with tarfile.open(fileobj=buf, mode="w:gz") as t:
+        for f in context_files(m):
+            t.add(os.path.join(m["dir"], f), arcname=f)
+    tmp = tempfile.mkdtemp(prefix="ctx-")
+    with open(os.path.join(tmp, "context.tar.gz"), "wb") as f:
+        f.write(buf.getvalue())
+    cm = sh("kubectl", "-n", BUILD_NS, "create", "configmap", name, f"--from-file=context.tar.gz={tmp}/context.tar.gz",
+            "-o", "name").strip()
+    labels = {"app.kubernetes.io/part-of": "radeon-cloud-images"}
+    job = {"apiVersion": "batch/v1", "kind": "Job", "metadata": {"name": name, "namespace": BUILD_NS, "labels": labels},
+           "spec": {"backoffLimit": 0, "activeDeadlineSeconds": 5400, "ttlSecondsAfterFinished": 3600, "template": {
+               "metadata": {"labels": labels},
+               "spec": {"restartPolicy": "Never",
+                        "containers": [{"name": "kaniko", "image": KANIKO, "args": [
+                            "--context=tar:///context/context.tar.gz", "--dockerfile=Dockerfile",
+                            f"--destination={PUSH}/{repo}:{tag}", "--digest-file=/dev/termination-log",
+                            f"--build-arg=PIP_INDEX_URL={PIP_INDEX}",
+                            "--insecure", "--insecure-pull", "--skip-tls-verify", "--skip-tls-verify-pull",
+                            "--snapshot-mode=redo", "--use-new-run", "--compressed-caching=false",
+                            "--push-retry=3", "--image-fs-extract-retry=3"],
+                            "resources": {"requests": {"cpu": "4", "memory": "16Gi", "ephemeral-storage": "150Gi"},
+                                          "limits": {"cpu": "16", "memory": "48Gi", "ephemeral-storage": "300Gi"}},
+                            "volumeMounts": [{"name": "context", "mountPath": "/context"},
+                                             {"name": "docker", "mountPath": "/kaniko/.docker", "readOnly": True}]}],
+                        "volumes": [{"name": "context", "configMap": {"name": name}},
+                                    {"name": "docker", "secret": {"secretName": "radeon-images-harbor", "items": [
+                                        {"key": ".dockerconfigjson", "path": "config.json"}]}}]}}}}
+    subprocess.run(["kubectl", "apply", "-f", "-"], input=json.dumps(job), text=True, check=True, capture_output=True)
+    print(f"build: Kaniko job {BUILD_NS}/{name} -> {repo}:{tag}")
+    try:
+        ok, deadline = False, time.time() + 5500
+        while time.time() < deadline:
+            st = json.loads(sh("kubectl", "-n", BUILD_NS, "get", "job", name, "-o", "json")).get("status", {})
+            if st.get("succeeded"):
+                ok = True; break
+            if st.get("failed"):
+                break
+            time.sleep(30)
+        print(sh("kubectl", "-n", BUILD_NS, "logs", f"job/{name}", "--tail=60", check=False))
+        if not ok:
+            print(sh("kubectl", "-n", BUILD_NS, "get", "pods", "-l", f"job-name={name}", "-o", "wide", check=False))
+            raise SystemExit(f"build failed for {m['name']}")
+    finally:
+        sh("kubectl", "-n", BUILD_NS, "delete", "job", name, "--wait=true", "--timeout=180s", check=False)
+        sh("kubectl", "-n", BUILD_NS, "delete", cm, check=False)
+    built = harbor.artifact(repo, tag)
+    if not built:
+        raise SystemExit(f"build reported success but {repo}:{tag} is not in Harbor")
+    print(f"build: {repo}:{tag} = {built['digest']}")
+    return repo, built["digest"]
 
 
 SLOT_POOL = [sys.executable, os.path.join(ROOT, "tools", "ci", "slot_pool.py")]
@@ -94,7 +174,8 @@ def _smoke_in(ns, m, candidate):
                "restartPolicy": "Never",
                "nodeSelector": {"amd-oneclick.io/workload-ci": "enabled"},
                "containers": [{"name": "smoke", "image": candidate, "command": ["/bin/bash", "/smoke/smoke.sh"],
-                               "env": [{"name": "SMOKE_MODEL_DIR", "value": "/models/Qwen2.5-0.5B-Instruct"}],
+                               "env": [{"name": "SMOKE_MODEL_DIR", "value": "/models/Qwen2.5-0.5B-Instruct"},
+                                       {"name": "HF_ENDPOINT", "value": HF_ENDPOINT}],
                                "resources": {"limits": {"amd.com/gpu": "1", "memory": "48Gi", "cpu": "8"},
                                              "requests": {"amd.com/gpu": "1", "memory": "16Gi", "cpu": "4"}},
                                "volumeMounts": [{"name": "smoke", "mountPath": "/smoke"}]}],
@@ -122,9 +203,9 @@ def _smoke_in(ns, m, candidate):
         raise SystemExit(f"smoke failed for {candidate}")
 
 
-def promote(m, digest):
+def promote(m, src_repo, digest):
     rc = m["rc_repo"]
-    harbor.copy(rc, m["mirror_repo"], digest)
+    harbor.copy(rc, src_repo, digest)
     cur = harbor.artifact(rc, "rc-current")
     if cur and cur["digest"] != digest:
         harbor.tag(rc, cur["digest"], "rc-prev")
@@ -141,19 +222,20 @@ def main():
     a = ap.parse_args()
     m = parse(a.image)
     print(json.dumps({k: v for k, v in m.items() if k != "dir"}, ensure_ascii=False))
-    if m["build"]:
-        raise SystemExit("Dockerfiles with build steps are not supported in the first batch")
     if a.dry_run:
+        if m["build"]:
+            print(f"build context {context_tag(m)}: {', '.join(context_files(m))}")
         return
-    ensure_mirror(m)
-    candidate = f"{PULL}/{m['mirror_repo']}@{m['digest']}"
+    ensure_mirror(m)   # the upstream image, or the base image of a build
+    src_repo, digest = build(m) if m["build"] else (m["mirror_repo"], m["digest"])
+    candidate = f"{PULL}/{src_repo}@{digest}"
     if not a.skip_smoke:
         smoke(m, candidate)
     if a.smoke_only:
-        print(f"SMOKE OK {a.image} {m['digest']} (not promoted)")
+        print(f"SMOKE OK {a.image} {digest} (not promoted)")
         return
-    promote(m, m["digest"])
-    print(f"RELEASED {a.image} {m['rc_repo']}:rc-current = {m['digest']}")
+    promote(m, src_repo, digest)
+    print(f"RELEASED {a.image} {m['rc_repo']}:rc-current = {digest}")
 
 
 if __name__ == "__main__":
