@@ -54,8 +54,38 @@ def ensure_mirror(m):
         raise SystemExit("mirror failed or digest not in Harbor afterwards")
 
 
+SLOT_POOL = [sys.executable, os.path.join(ROOT, "tools", "ci", "slot_pool.py")]
+
+
+def slot_acquire():
+    """Claim one CI slot (same lease protocol as RCI CI). Leaves it 'allocated'; we never deploy a stack into it."""
+    r = subprocess.run(SLOT_POOL + ["acquire", "--wait-seconds", "3600"], text=True, capture_output=True)
+    last = (r.stdout.strip().splitlines() or ["{}"])[-1]
+    slot = json.loads(last) if last.startswith("{") else {}
+    if r.returncode or slot.get("acquired") != "true":
+        raise SystemExit(f"could not claim a CI slot: {r.stdout[-300:]} {r.stderr[-300:]}")
+    print(f"slot: {slot['id']} ({slot['namespace']})")
+    return slot["namespace"]
+
+
+def slot_release(job_gone):
+    """Release only when our Job is confirmed gone; otherwise quarantine so RCI CI never gets a busy GPU slot."""
+    cmd = "release" if job_gone else "quarantined"
+    r = subprocess.run(SLOT_POOL + [cmd], text=True, capture_output=True)
+    print(f"slot: {cmd} rc={r.returncode} {r.stdout.strip()[-200:]}")
+
+
 def smoke(m, candidate):
-    ns = os.environ["SLOT_NAMESPACE"]  # claimed by the workflow via tools/ci/slot_pool.py acquire
+    ns = slot_acquire()
+    try:
+        _smoke_in(ns, m, candidate)
+    finally:
+        gone = subprocess.run(["kubectl", "-n", ns, "get", "jobs", "-l", "app.kubernetes.io/part-of=radeon-cloud-images",
+                               "-o", "name"], text=True, capture_output=True).stdout.strip() == ""
+        slot_release(gone)
+
+
+def _smoke_in(ns, m, candidate):
     name = f"rcimg-smoke-{m['name']}-{int(time.time())}"[:62]
     cm = sh("kubectl", "-n", ns, "create", "configmap", name, f"--from-file=smoke.sh={m['dir']}/smoke.sh", "-o", "name")
     job = {"apiVersion": "batch/v1", "kind": "Job",
@@ -77,7 +107,7 @@ def smoke(m, candidate):
         print(logs)
         ok = r.returncode == 0 and "SMOKE PASS" in logs
     finally:
-        sh("kubectl", "-n", ns, "delete", "job", name, "--wait=false", check=False)
+        sh("kubectl", "-n", ns, "delete", "job", name, "--wait=true", "--timeout=180s", check=False)
         sh("kubectl", "-n", ns, "delete", cm, check=False)
     if not ok:
         raise SystemExit(f"smoke failed for {candidate}")
@@ -99,6 +129,7 @@ def main():
     ap.add_argument("--sites", default="gt,global,china")
     ap.add_argument("--skip-smoke", action="store_true", help="only for rollback to an already-smoked digest")
     ap.add_argument("--dry-run", action="store_true")
+    ap.add_argument("--smoke-only", action="store_true", help="PR check: mirror + smoke, no rc-current move, no catalog")
     a = ap.parse_args()
     m = parse(a.image)
     print(json.dumps({k: v for k, v in m.items() if k != "dir"}, ensure_ascii=False))
@@ -110,6 +141,9 @@ def main():
     candidate = f"{PULL}/{m['mirror_repo']}@{m['digest']}"
     if not a.skip_smoke:
         smoke(m, candidate)
+    if a.smoke_only:
+        print(f"SMOKE OK {a.image} {m['digest']} (not promoted)")
+        return
     promote(m, m["digest"])
     import catalog
     for site in [s for s in a.sites.split(",") if s]:

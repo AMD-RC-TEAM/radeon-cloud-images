@@ -1,4 +1,4 @@
-# Every change needs an approver; merging to main releases (D-20261112-27).
+# Notification only: merging is gated by the pr-check CI (validate + smoke), not by review (D-20261112-29).
 *                 @vivienfanghuagood @M4jupitercannon
 /tools/           @vivienfanghuagood
 /.github/         @vivienfanghuagood
