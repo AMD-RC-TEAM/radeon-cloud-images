@@ -106,6 +106,15 @@ def _smoke_in(ns, m, candidate):
         logs = sh("kubectl", "-n", ns, "logs", f"job/{name}", "--tail=200", check=False)
         print(logs)
         ok = r.returncode == 0 and "SMOKE PASS" in logs
+        if not ok:
+            # The slot namespaces keep no events, so say why before the Job is deleted (11-12: a smoke sat 30 min with no output).
+            print("smoke did not pass; pod state:")
+            print(sh("kubectl", "-n", ns, "get", "pods", "-l", f"job-name={name}", "-o",
+                     "custom-columns=POD:.metadata.name,PHASE:.status.phase,NODE:.spec.nodeName,"
+                     "WAITING:.status.containerStatuses[0].state.waiting.reason,"
+                     "TERMINATED:.status.containerStatuses[0].state.terminated.reason,"
+                     "SCHEDULED:.status.conditions[?(@.type=='PodScheduled')].message", check=False))
+            print(sh("kubectl", "-n", ns, "describe", "pods", "-l", f"job-name={name}", check=False)[-2500:])
     finally:
         sh("kubectl", "-n", ns, "delete", "job", name, "--wait=true", "--timeout=180s", check=False)
         sh("kubectl", "-n", ns, "delete", cm, check=False)
