@@ -1,7 +1,7 @@
 # radeon-cloud-images
 
 The single source for the images behind the "stable" rows of the Radeon Cloud image picker
-(owner decisions D-20261112-26, -27, -28, -29, -33, -37). Every image is defined by a Dockerfile. The standard flow (D-20261112-37):
+(owner decisions D-20261112-26, -27, -28, -29, -33, -37, -39). Every image is defined by a Dockerfile. The standard flow (D-20261112-37):
 **a PR (from the bot or a person) → one human Approve → build and smoke → release**.
 
 Everything in this repository is written in English: docs, comments, script output, workflow
@@ -41,6 +41,12 @@ tools/
    previous digest and the daily issue says why.
 6. **Failure anywhere:** nothing further moves; one line in the day's "image pipeline daily" issue.
 
+## Templates
+**Point templates at a fixed-version image row, not at a stable row.** Stable rows move with this pipeline.
+Updating a template's image is done by the template's owner, by hand in Admin, and tested by them (D-20261112-39).
+The pipeline never changes a row that any template (public or private) references, and the daily issue names
+every template that points at a stable row so its owner can move it to a fixed-version row.
+
 ## Old images stay usable
 - **Templates are pinned.** Templates reference catalog rows that hold a fixed digest. The pipeline only ever
   updates the per-category *stable* rows, and refuses to adopt on any row that a template references.
@@ -50,6 +56,8 @@ tools/
   version is kept. The same rule applies to it: if a template references the "(previous)" row, the pipeline
   stops moving that row (it becomes a frozen row like any other template-referenced row) and says so in the
   daily issue.
+  This should be rare: the new UI has no personal templates, so once the old UI is retired only public
+  templates exist, and those are pointed at fixed-version rows by their owners.
 - **Running instances are not affected.** A release changes which digest new launches use. Instances that are
   already running keep the image they started with until they are deleted.
 
