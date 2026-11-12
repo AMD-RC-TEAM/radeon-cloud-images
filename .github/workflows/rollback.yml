@@ -1,31 +1,26 @@
-# One-click rollback: point rc-current back at rc-prev and re-adopt on the chosen sites (no smoke; rc-prev was smoked).
+# One-click rollback: point rc-current back at rc-prev (rc-prev was smoked). Catalog rows follow rc-current outside CI.
 name: rollback
 on:
   workflow_dispatch:
     inputs:
       image: {description: "image dir under images/", required: true}
-      sites: {description: "catalog sites", default: "gt,global,china"}
 permissions: {contents: read}
 jobs:
   rollback:
     runs-on: [self-hosted, radeon-images]
-    env: {CATALOG_URL_GT: "${{ vars.CATALOG_URL_GT }}", CATALOG_URL_GLOBAL: "${{ vars.CATALOG_URL_GLOBAL }}", CATALOG_URL_CHINA: "${{ vars.CATALOG_URL_CHINA }}"}
     steps:
       - uses: actions/checkout@v4
       - run: |
-          umask 077; mkdir -p "$RUNNER_TEMP/docker" "$RUNNER_TEMP/catalog"
+          umask 077; mkdir -p "$RUNNER_TEMP/docker"
           kubectl -n amd-oneclick-ci-runners get secret radeon-images-harbor -o jsonpath='{.data.\.dockerconfigjson}' | base64 -d > "$RUNNER_TEMP/docker/config.json"
-          for s in gt global china; do kubectl -n amd-oneclick-ci-runners get secret radeon-images-catalog -o jsonpath="{.data.$s}" | base64 -d > "$RUNNER_TEMP/catalog/$s"; done
-          export DOCKER_CONFIG="$RUNNER_TEMP/docker" CATALOG_TOKEN_DIR="$RUNNER_TEMP/catalog"
-          python3 - "${{ inputs.image }}" "${{ inputs.sites }}" <<'PY'
+          export DOCKER_CONFIG="$RUNNER_TEMP/docker"
+          python3 - "${{ inputs.image }}" <<'PY'
           import sys; sys.path.insert(0, "tools")
-          import harbor, catalog, release
+          import harbor, release
           m = release.parse(sys.argv[1]); prev = harbor.artifact(m["rc_repo"], "rc-prev")
           if not prev: raise SystemExit("no rc-prev to roll back to")
           cur = harbor.artifact(m["rc_repo"], "rc-current")
           harbor.tag(m["rc_repo"], prev["digest"], "rc-current")
           if cur: harbor.tag(m["rc_repo"], cur["digest"], "rc-rolled-back")
-          for s in [x for x in sys.argv[2].split(",") if x]:
-              print(s, catalog.adopt(s, m["catalog_row"], prev["digest"]))
           print("ROLLED BACK", m["rc_repo"], "->", prev["digest"])
           PY

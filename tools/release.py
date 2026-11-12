@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
-"""Release one image: mirror upstream -> candidate -> GPU smoke in a CI slot -> rc-current -> catalog (GT, Global, China).
+"""Release one image: mirror upstream -> candidate -> GPU smoke in a CI slot -> move rc-current (D-20261112-33).
 
-  release.py <image> [--sites gt,global,china] [--dry-run]
+  release.py <image> [--smoke-only] [--dry-run]
 
-Inputs: images/<image>/{Dockerfile,image.yaml,smoke.sh}. Harbor creds via $DOCKER_CONFIG, catalog tokens via
-$CATALOG_TOKEN_DIR (both k8s Secret mounts on the runner). Nothing secret is printed.
+Inputs: images/<image>/{Dockerfile,image.yaml,smoke.sh}. Harbor creds via $DOCKER_CONFIG (k8s Secret on the runner).
+Nothing secret is printed. CI stops at rc-current: the catalog rows that track rc-current are updated outside CI.
 A FROM-only Dockerfile is released as the mirrored upstream image itself (same digest); Dockerfiles with build
 steps are built with Kaniko in the slot namespace (not in the first batch).
 """
@@ -126,7 +126,6 @@ def promote(m, digest):
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("image")
-    ap.add_argument("--sites", default="gt,global,china")
     ap.add_argument("--skip-smoke", action="store_true", help="only for rollback to an already-smoked digest")
     ap.add_argument("--dry-run", action="store_true")
     ap.add_argument("--smoke-only", action="store_true", help="PR check: mirror + smoke, no rc-current move, no catalog")
@@ -145,10 +144,7 @@ def main():
         print(f"SMOKE OK {a.image} {m['digest']} (not promoted)")
         return
     promote(m, m["digest"])
-    import catalog
-    for site in [s for s in a.sites.split(",") if s]:
-        print(f"[{site}] {m['catalog_row']}: {catalog.adopt(site, m['catalog_row'], m['digest'])}")
-    print(f"RELEASED {a.image} {m['digest']}")
+    print(f"RELEASED {a.image} {m['rc_repo']}:rc-current = {m['digest']}")
 
 
 if __name__ == "__main__":
