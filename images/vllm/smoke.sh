@@ -3,7 +3,7 @@
 # SMOKE_MODEL_DIR is mounted read-only by the smoke Pod (model cache); default model Qwen2.5-0.5B-Instruct.
 set -euo pipefail
 MODEL=${SMOKE_MODEL_DIR:-/models/Qwen2.5-0.5B-Instruct}
-rocminfo | grep -m1 -E 'gfx11[0-9]{2}'
+grep -m1 -E 'gfx11[0-9]{2}' <<<"$(rocminfo)"
 python3 -c 'import vllm, torch; print("vllm", vllm.__version__, "torch", torch.__version__); assert torch.cuda.is_available()'
 (vllm serve "$MODEL" --served-model-name smoke --port 18000 --max-model-len 2048 --gpu-memory-utilization 0.5 >/tmp/vllm.log 2>&1 &)
 for i in $(seq 1 120); do curl -sf http://127.0.0.1:18000/health >/dev/null && break; sleep 5; done
