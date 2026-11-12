@@ -9,16 +9,20 @@ grep -m1 -E 'gfx1100' <<<"$(rocminfo)"
 python3 -c 'import sglang, torch; print("sglang", sglang.__version__, "torch", torch.__version__); assert torch.cuda.is_available()'
 python3 -c 'import importlib.metadata as m; print("sglang-radeon-rdna3", m.version("sglang-radeon-rdna3"))'
 python3 -c 'import sgl_kernel, os; print("sgl_kernel", os.path.dirname(sgl_kernel.__file__))'
+python3 - <<'PY'
+from sglang.srt import server_args as sa
+assert getattr(sa.ServerArgs, "_rc_rdna3_defaults", False), "rc_sglang_defaults did not load"
+print("rc_sglang_defaults: loaded")
+PY
 if [ ! -f "$MODEL/config.json" ]; then
   MODEL=$(mktemp -d)/Qwen2.5-0.5B-Instruct
   echo "downloading Qwen/Qwen2.5-0.5B-Instruct via ${HF_ENDPOINT:-huggingface.co}"
   python3 -c 'import sys; from huggingface_hub import snapshot_download as s; s("Qwen/Qwen2.5-0.5B-Instruct", local_dir=sys.argv[1])' "$MODEL"
 fi
 LOG=$(mktemp)
-# The RDNA3 plugin's known-good serving flags (sglang-rdna3 serve-args): the Triton attention backend (aiter, fa3 and
-# flashinfer are CDNA- or CUDA-only), no HIP graph capture (it hangs on gfx1100), bf16. Templates must pass the same.
-setsid sglang serve --model-path "$MODEL" --served-model-name smoke --host 127.0.0.1 --port "$PORT" \
-  --attention-backend triton --disable-cuda-graph --dtype bfloat16 --mem-fraction-static 0.5 > "$LOG" 2>&1 &
+# Exactly what a user types: no RDNA3 flags. The image's defaults (rc_sglang_defaults) must make this work.
+setsid python3 -m sglang.launch_server --model-path "$MODEL" --served-model-name smoke --host 127.0.0.1 --port "$PORT" \
+  --mem-fraction-static 0.5 > "$LOG" 2>&1 &
 SP=$!
 for i in $(seq 1 120); do
   curl -sf -m 2 "http://127.0.0.1:$PORT/health" > /dev/null && break

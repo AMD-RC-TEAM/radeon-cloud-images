@@ -28,6 +28,13 @@ RUN python3 /tmp/fetch_sglang_src.py ${SGLANG_COMMIT} /opt/sglang-src \
  && rm -rf /tmp/requirements.txt /tmp/fetch_sglang_src.py /root/.cache \
  && (pip check | grep -v -i -E "torch|triton|rocm|nvidia|cuda|flashinfer|sgl|tilelang|quack|deep|mistral|tokenspeed" > /opt/pip-check.txt || true)
 
+# RDNA3 serving defaults (triton attention, no CUDA graphs), so a plain `python -m sglang.launch_server` works.
+COPY rc_sglang_defaults.py rc_sglang_defaults.pth README.md /tmp/rc/
+RUN SP=$(python3 -c "import sysconfig; print(sysconfig.get_paths()['purelib'])") \
+ && install -m 644 /tmp/rc/rc_sglang_defaults.py /tmp/rc/rc_sglang_defaults.pth "$SP"/ \
+ && install -D -m 644 /tmp/rc/README.md /opt/sglang/README.md \
+ && rm -rf /tmp/rc
+
 # SGLang imports aiter unconditionally on ROCm (quark MXFP4 schemes); the plugin stubs its CDNA-only kernels.
 # aiter is installed for that import only: its kernels stay off (SGLANG_USE_AITER=0, no aiter RoPE).
 ENV GPU_ARCHS=gfx1100 \
