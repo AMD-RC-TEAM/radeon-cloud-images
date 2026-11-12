@@ -39,15 +39,8 @@ jobs:
           kubectl -n amd-oneclick-ci-runners get secret radeon-images-harbor -o jsonpath='{.data.\.dockerconfigjson}' | base64 -d > "$RUNNER_TEMP/docker/config.json"
           for s in gt global china; do kubectl -n amd-oneclick-ci-runners get secret radeon-images-catalog -o jsonpath="{.data.$s}" | base64 -d > "$RUNNER_TEMP/catalog/$s"; done
           echo "DOCKER_CONFIG=$RUNNER_TEMP/docker" >> "$GITHUB_ENV"; echo "CATALOG_TOKEN_DIR=$RUNNER_TEMP/catalog" >> "$GITHUB_ENV"
-      - name: Claim a CI GPU slot
-        id: slot
-        run: python3 tools/ci/slot_pool.py acquire
-      - name: Release
-        env: {SLOT_NAMESPACE: "${{ steps.slot.outputs.namespace }}"}
+      - name: Release (claims and frees its own CI slot)
         run: python3 tools/release.py "${{ matrix.image }}" --sites "${{ inputs.sites || 'gt,global,china' }}"
-      - name: Free the slot
-        if: always() && steps.slot.outcome == 'success'
-        run: python3 tools/ci/slot_pool.py finish --namespace "${{ steps.slot.outputs.namespace }}" || true
       - name: Report failure to the daily issue
         if: failure()
         env: {GH_TOKEN: "${{ github.token }}"}

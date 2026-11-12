@@ -1,0 +1,39 @@
+# Required checks for merging to main (D-20261112-29): `validate` always, `smoke` for every changed image.
+# Merging is the release; these checks make sure only images that pass the W7900D smoke can be merged.
+name: pr-check
+on:
+  pull_request:
+    branches: [main]
+permissions: {contents: read}
+jobs:
+  validate:
+    runs-on: [self-hosted, radeon-images]
+    outputs: {images: "${{ steps.c.outputs.images }}"}
+    steps:
+      - uses: actions/checkout@v4
+        with: {fetch-depth: 0}
+      - name: Parse every image and workflow
+        run: |
+          for d in images/*/; do python3 tools/release.py "$(basename "$d")" --dry-run >/dev/null; test -x "$d/smoke.sh"; done
+          python3 -c 'import glob,yaml;[yaml.safe_load(open(f)) for f in glob.glob(".github/workflows/*.yml")]'
+          python3 -m py_compile tools/*.py tools/ci/*.py
+      - id: c
+        name: Changed images
+        run: |
+          git diff --name-only "origin/${{ github.base_ref }}...HEAD" -- images/ | cut -d/ -f2 | sort -u \
+            | python3 -c 'import json,sys;print("images="+json.dumps([l.strip() for l in sys.stdin if l.strip()]))' >> "$GITHUB_OUTPUT"
+  smoke:
+    needs: validate
+    runs-on: [self-hosted, radeon-images]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Smoke changed images (none changed = pass)
+        run: |
+          imgs='${{ needs.validate.outputs.images }}'
+          [ "$imgs" = "[]" ] && { echo "no image changed"; exit 0; }
+          umask 077; mkdir -p "$RUNNER_TEMP/docker"
+          kubectl -n amd-oneclick-ci-runners get secret radeon-images-harbor -o jsonpath='{.data.\.dockerconfigjson}' | base64 -d > "$RUNNER_TEMP/docker/config.json"
+          export DOCKER_CONFIG="$RUNNER_TEMP/docker"
+          for i in $(echo "$imgs" | python3 -c 'import json,sys;print(" ".join(json.load(sys.stdin)))'); do
+            python3 tools/release.py "$i" --smoke-only
+          done

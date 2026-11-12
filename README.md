@@ -17,6 +17,7 @@ tools/
   release.yml        # main 上 images/** 有变化就发布
   upstream-check.yml # 每天检查上游；有新版本由 bot 推升级分支并开 issue（附一键开 PR 链接；组织不允许 Actions 直接开 PR）
   rollback.yml       # 手动一键回滚
+  pr-check.yml       # PR 必过：validate + smoke（只冒烟，不改别名和目录）
 ```
 
 ## 发布流程（`release.yml`）
@@ -45,7 +46,7 @@ Actions → rollback → 填 image 和 sites：`rc-current` 指回 `rc-prev`，�
 集群内一个只服务本仓库的 runner（label `radeon-images`，`amd-oneclick-ci-runners` 命名空间，用 `gh-runner` 服务账号，所以有 CI 槽位租约和槽位命名空间的权限）。注册只用一次性的 registration token，集群里只保存 runner 自己的凭据，不存 PAT。
 
 ## 分支保护（main）
-需要 1 个 CODEOWNERS 批准，旧的批准在有新提交后作废；不允许直接推送，管理员也不例外；禁止强推和删除分支（已在 11-12 设置）。
+合入只看 CI（D-20261112-29）：必须通过 `pr-check` 的 `validate`（解析所有镜像和 workflow）和 `smoke`（改动过的镜像在 W7900D 上冒烟），不要求人工审批；CODEOWNERS 只用来通知。不允许直接推送，管理员也不例外；禁止强推和删除分支。
 
 ## 状态
 首批：PyTorch 稳定版、PyTorch 最新版、vLLM。第二批：Base、Unsloth、SGLang+hk-dsl（hk-B）。llama.cpp、ComfyUI 后续再加。
