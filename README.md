@@ -1,7 +1,7 @@
 # radeon-cloud-images
 
 The single source for the images behind the "stable" rows of the Radeon Cloud image picker
-(owner decisions D-20261112-26, -27, -28, -29). Every image is defined by a Dockerfile, and
+(owner decisions D-20261112-26, -27, -28, -29, -33). Every image is defined by a Dockerfile, and
 **merging a change to `main` releases it**.
 
 Everything in this repository is written in English: docs, comments, script output, workflow
@@ -14,9 +14,9 @@ images/<name>/
   image.yaml   # rc_repo (Harbor alias repo), catalog_row (the stable row), smoke profile, upstream tag rule
   smoke.sh     # runs inside the image on one W7900D; prints "SMOKE PASS" last on success
 tools/
-  release.py         # full release of one image: mirror upstream -> smoke -> rc-current -> catalog (GT, Global, China)
+  release.py         # release one image: mirror upstream -> smoke -> move rc-current
   mirror.sh          # resumable, digest-checked mirror (the Wuxi edge cuts single connections at ~10 min), then crane push
-  harbor.py catalog.py upstream_check.py
+  harbor.py upstream_check.py
   ci/slot_pool.py    # CI GPU slot leases shared with Radeon-Cloud-Internal CI (vendored, keep in sync)
 .github/workflows/
   pr-check.yml       # required on every PR: validate + smoke (smoke only; no tag or catalog change)
@@ -33,15 +33,15 @@ tools/
    The slot is released only once the Job is confirmed gone; otherwise it is quarantined.
 3. **Alias.** Copy the digest server-side into `radeon-cloud-global/rc/<category>`, move the old `rc-current`
    to `rc-prev`, and point `rc-current` at the new digest.
-4. **Catalog.** For GT, then Global, then China, call `POST /api/admin/images/{id}/harbor` (drift check) and
-   `.../harbor/adopt` on the `catalog_row`. **Only stable rows are updated.** Before adopting, the release checks
-   `GET /api/admin/templates` and refuses if any template points at that row.
-5. **Failure.** No alias move and no catalog change; one line is added to the day's "image pipeline daily" issue.
-6. **Production +1 h.** If the launch failure rate is worse than before the release, roll back automatically
-   (`watch.yml`, to be added before the first production release).
+4. **Catalog (outside CI).** The stable catalog rows track `rc/<category>:rc-current`. rc-ops runs a small sync
+   job (not in this repo's CI) that calls the existing `POST /api/admin/images/{id}/harbor` and `.../harbor/adopt`
+   with an owner Admin session, GT first, then Global and China. It only touches stable rows and refuses a row
+   that any template points at.
+5. **Failure.** No alias move; one line is added to the day's "image pipeline daily" issue.
+6. **Production +1 h.** rc-ops' existing post-deploy checks watch launch failures; a regression means rollback.
 
 ## Rollback
-Actions -> rollback -> image and sites: `rc-current` goes back to `rc-prev`, then adopt; takes about a minute.
+Actions -> rollback -> image: `rc-current` goes back to `rc-prev`; the catalog sync then adopts it.
 The digest that was rolled back stays tagged `rc-rolled-back`.
 
 ## Adding or upgrading an image
@@ -52,16 +52,12 @@ The digest that was rolled back stays tagged `rc-rolled-back`.
   SGLang+hk-dsl comes as a PR from hk-B).
 
 ## Credentials (never in GitHub)
-Kept as k8s Secrets in the runner namespace `amd-oneclick-ci-runners`; workflows copy them to `$RUNNER_TEMP` at run
-time and never print them:
+Only one, kept as a k8s Secret in the runner namespace `amd-oneclick-ci-runners` and copied to `$RUNNER_TEMP` at run
+time, never printed:
 - `radeon-images-harbor` (`.dockerconfigjson`): Harbor robot `radeon-cloud-images-ci`, limited to the
   `radeon-cloud-global` project (pull/push, artifact read/create, tag create/delete). Expires 180 days from 2026-11-12.
-- `radeon-images-catalog` (keys `gt`/`global`/`china`): one scoped operator token per site, allowed only
-  `GET /api/admin/images`, `GET /api/admin/templates`, `POST /api/admin/images/{image_id}/harbor` and
-  `POST /api/admin/images/{image_id}/harbor/adopt`. 90 days; the daily issue reminds 14 days before expiry.
 
-Repository variables (not secret): `CATALOG_URL_GT`, `CATALOG_URL_GLOBAL`, `CATALOG_URL_CHINA` (in-cluster
-manager URLs of each site).
+No catalog credential is stored in the cluster (D-20261112-33).
 
 ## Runner
 One in-cluster runner that serves only this repository (label `radeon-images`, namespace `amd-oneclick-ci-runners`,
