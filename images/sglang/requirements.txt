@@ -95,3 +95,8 @@ zipp==4.1.2
 zmq==0.0.0
 sglang-radeon-rdna3==0.2.0
 amd-aiter==0.1.7.post2.dev18
+pybind11==3.1.0
+pandas==3.1.1
+python-dateutil==4.0.0
+tzdata==2026.6
+six==1.17.0
