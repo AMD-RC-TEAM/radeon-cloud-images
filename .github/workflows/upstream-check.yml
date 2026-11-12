@@ -1,0 +1,21 @@
+# Daily: if upstream has a newer tag matching image.yaml, open ONE upgrade PR (never touches the catalog).
+name: upstream-check
+on:
+  schedule: [{cron: "17 1 * * *"}]
+  workflow_dispatch: {}
+permissions: {contents: write, pull-requests: write}
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - id: c
+        run: python3 tools/upstream_check.py --write
+      - if: steps.c.outputs.changed == 'true'
+        env: {GH_TOKEN: "${{ github.token }}"}
+        run: |
+          b=bot/upstream-$(date -u +%Y%m%d)
+          git config user.name "radeon-images-bot"; git config user.email "radeon-images-bot@users.noreply.github.com"
+          git checkout -B "$b"; git commit -am "${{ steps.c.outputs.title }}"; git push -f origin "$b"
+          gh pr list --head "$b" --json number -q '.[0].number' | grep -q . || \
+            gh pr create --head "$b" --title "${{ steps.c.outputs.title }}" --body "上游有新版本。合入即发布：构建/镜像 → W7900D 冒烟 → 更新目录稳定行（GT → Global → 中国站）。请先看上游 release notes。"

@@ -1,0 +1,57 @@
+# Merging a change under images/<name>/ to main IS the release gate (owner D-20261112-27).
+# Per changed image: mirror upstream (digest-preserving) -> 1-GPU W7900D smoke in a CI slot -> rc-current -> catalog GT, Global, China.
+name: release
+on:
+  push:
+    branches: [main]
+    paths: ["images/**"]
+  workflow_dispatch:
+    inputs:
+      image: {description: "image dir under images/", required: true}
+      sites: {description: "catalog sites", default: "gt,global,china"}
+concurrency: {group: "release-${{ github.ref }}", cancel-in-progress: false}
+permissions: {contents: read, issues: write}
+jobs:
+  plan:
+    runs-on: [self-hosted, radeon-images]
+    outputs: {images: "${{ steps.p.outputs.images }}"}
+    steps:
+      - uses: actions/checkout@v4
+        with: {fetch-depth: 2}
+      - id: p
+        run: |
+          if [ -n "${{ inputs.image }}" ]; then echo 'images=["${{ inputs.image }}"]' >> "$GITHUB_OUTPUT"; exit 0; fi
+          git diff --name-only HEAD~1 HEAD -- images/ | cut -d/ -f2 | sort -u | python3 -c 'import json,sys;print("images="+json.dumps([l.strip() for l in sys.stdin if l.strip()]))' >> "$GITHUB_OUTPUT"
+  release:
+    needs: plan
+    if: ${{ needs.plan.outputs.images != '[]' }}
+    runs-on: [self-hosted, radeon-images]
+    strategy: {fail-fast: false, max-parallel: 1, matrix: {image: "${{ fromJSON(needs.plan.outputs.images) }}"}}
+    env:
+      CATALOG_URL_GT: ${{ vars.CATALOG_URL_GT }}
+      CATALOG_URL_GLOBAL: ${{ vars.CATALOG_URL_GLOBAL }}
+      CATALOG_URL_CHINA: ${{ vars.CATALOG_URL_CHINA }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Credentials from the runner namespace (never echoed)
+        run: |
+          umask 077; mkdir -p "$RUNNER_TEMP/docker" "$RUNNER_TEMP/catalog"
+          kubectl -n amd-oneclick-ci-runners get secret radeon-images-harbor -o jsonpath='{.data.\.dockerconfigjson}' | base64 -d > "$RUNNER_TEMP/docker/config.json"
+          for s in gt global china; do kubectl -n amd-oneclick-ci-runners get secret radeon-images-catalog -o jsonpath="{.data.$s}" | base64 -d > "$RUNNER_TEMP/catalog/$s"; done
+          echo "DOCKER_CONFIG=$RUNNER_TEMP/docker" >> "$GITHUB_ENV"; echo "CATALOG_TOKEN_DIR=$RUNNER_TEMP/catalog" >> "$GITHUB_ENV"
+      - name: Claim a CI GPU slot
+        id: slot
+        run: python3 tools/ci/slot_pool.py acquire
+      - name: Release
+        env: {SLOT_NAMESPACE: "${{ steps.slot.outputs.namespace }}"}
+        run: python3 tools/release.py "${{ matrix.image }}" --sites "${{ inputs.sites || 'gt,global,china' }}"
+      - name: Free the slot
+        if: always() && steps.slot.outcome == 'success'
+        run: python3 tools/ci/slot_pool.py finish --namespace "${{ steps.slot.outputs.namespace }}" || true
+      - name: Report failure to the daily issue
+        if: failure()
+        env: {GH_TOKEN: "${{ github.token }}"}
+        run: |
+          t="镜像流水线日报 $(date -u +%F)"; n=$(gh issue list -S "\"$t\" in:title" --json number -q '.[0].number')
+          [ -n "$n" ] || n=$(gh issue create -t "$t" -b "每日一条：失败的发布不会更新目录。" | grep -oE '[0-9]+$')
+          gh issue comment "$n" -b "❌ ${{ matrix.image }} 发布失败，目录未更新：${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
