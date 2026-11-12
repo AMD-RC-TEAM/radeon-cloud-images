@@ -1,8 +1,8 @@
 # radeon-cloud-images
 
 The single source for the images behind the "stable" rows of the Radeon Cloud image picker
-(owner decisions D-20261112-26, -27, -28, -29, -33). Every image is defined by a Dockerfile, and
-**merging a change to `main` releases it**.
+(owner decisions D-20261112-26, -27, -28, -29, -33, -37). Every image is defined by a Dockerfile. The standard flow (D-20261112-37):
+**a PR (from the bot or a person) → one human Approve → build and smoke → release**.
 
 Everything in this repository is written in English: docs, comments, script output, workflow
 names, issues, PRs and commit messages.
@@ -25,23 +25,36 @@ tools/
   rollback.yml       # manual one-click rollback
 ```
 
-## Release flow (`release.yml`)
-1. **Mirror.** If Harbor does not have the upstream digest yet, mirror it to `radeon-cloud-global/<upstream repo>:<tag>`
+## Release flow
+1. **PR and Approve.** Every change to `main` needs one Approve from a code owner, plus green `validate` and `smoke`.
+   The Approve is the only human gate; there is no extra waiting period or second approval.
+2. **Mirror.** If Harbor does not have the upstream digest yet, mirror it to `radeon-cloud-global/<upstream repo>:<tag>`
    with the digest unchanged. Cluster nodes never pull large images from the internet.
-2. **Smoke.** Claim a CI slot with `tools/ci/slot_pool.py`, run a 1-GPU Job in the slot namespace
+3. **Smoke.** Claim a CI slot with `tools/ci/slot_pool.py`, run a 1-GPU Job in the slot namespace
    (nodes labelled `amd-oneclick.io/workload-ci=enabled`) that runs `smoke.sh`. No `SMOKE PASS` means failure.
    The slot is released only once the Job is confirmed gone; otherwise it is quarantined.
-3. **Alias.** Copy the digest server-side into `radeon-cloud-global/rc/<category>`, move the old `rc-current`
-   to `rc-prev`, and point `rc-current` at the new digest.
-4. **Catalog (outside CI).** The stable catalog rows track `rc/<category>:rc-current`. rc-ops runs a small sync
-   job (not in this repo's CI) that calls the existing `POST /api/admin/images/{id}/harbor` and `.../harbor/adopt`
-   with an owner Admin session, GT first, then Global and China. It only touches stable rows and refuses a row
-   that any template points at.
-5. **Failure.** No alias move; one line is added to the day's "image pipeline daily" issue.
-6. **Production +1 h.** rc-ops' existing post-deploy checks watch launch failures; a regression means rollback.
+4. **Alias.** Copy the digest server-side into `radeon-cloud-global/rc/<category>`, move the old `rc-current`
+   to `rc-prev`, and point `rc-current` at the new digest. CI stops here.
+5. **Catalog (outside CI, rc-ops job).** GT first: the stable row adopts the new digest, then an automatic launch
+   check starts one minimal instance from that row on GT and deletes it once it is ready. Only after that check
+   passes do the Global and China stable rows adopt the same digest. If the check fails, production keeps the
+   previous digest and the daily issue says why.
+6. **Failure anywhere:** nothing further moves; one line in the day's "image pipeline daily" issue.
+
+## Old images stay usable
+- **Templates are pinned.** Templates reference catalog rows that hold a fixed digest. The pipeline only ever
+  updates the per-category *stable* rows, and refuses to adopt on any row that a template references.
+- **One previous version stays available.** On every release the old digest is kept in Harbor as `rc-prev`, and
+  each site keeps one hidden catalog row "<category> (previous)" tracking `rc/<category>:rc-prev`, for users or
+  templates that need the older environment and as the one-click rollback target. Only the latest previous
+  version is kept. The same rule applies to it: if a template references the "(previous)" row, the pipeline
+  stops moving that row (it becomes a frozen row like any other template-referenced row) and says so in the
+  daily issue.
+- **Running instances are not affected.** A release changes which digest new launches use. Instances that are
+  already running keep the image they started with until they are deleted.
 
 ## Rollback
-Actions -> rollback -> image: `rc-current` goes back to `rc-prev`; the catalog sync then adopts it.
+Actions -> rollback -> image: `rc-current` goes back to `rc-prev`; the catalog job then adopts it on every site.
 The digest that was rolled back stays tagged `rc-rolled-back`.
 
 ## Adding or upgrading an image
@@ -64,10 +77,14 @@ One in-cluster runner that serves only this repository (label `radeon-images`, n
 service account `gh-runner`, so it has the CI slot lease and slot namespace permissions). It was registered once
 with a one-time registration token; the cluster stores only the runner's own credentials, no PAT.
 
-## Branch protection (`main`)
-Merging is gated by CI (D-20261112-29): `pr-check` must pass `validate` (parses every image and workflow) and
-`smoke` (changed images on a W7900D). No human approval is required; CODEOWNERS is for notification only.
-No direct pushes, admins included; no force pushes or branch deletion.
+## Branch protection and who approves (`main`)
+`main` requires one Approve from a code owner (the owner or Zijun) and green `validate` and `smoke`; no direct
+pushes, admins included; no force pushes or branch deletion. GitHub does not let anyone approve their own PR, so:
+- **Today (no bot App):** the upgrade bot pushes a branch and opens an issue with a one-click "open PR" link. The
+  owner opens the PR from that link, so the owner is the PR author, and **Zijun approves**. A PR opened by Zijun is
+  approved by the owner.
+- **Later, if the GitHub App is created** (manifest kept by rc-ops): the bot itself opens the PR, so the PR author is
+  the bot and **the owner can approve** directly.
 
 ## Status
 First batch: PyTorch stable, PyTorch latest, vLLM. Second batch: Base, Unsloth, SGLang+hk-dsl (hk-B).
