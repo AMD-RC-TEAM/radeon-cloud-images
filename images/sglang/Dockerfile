@@ -1,6 +1,8 @@
 # upstream: docker.io/rocm/pytorch:rocm7.2.4_ubuntu24.04_py3.12_pytorch_release_2.10.0@sha256:4449f856653602317e4101a76fce599c7fcd58ccec2e539951fce5f73083179e
-# SGLang 0.5.23 (LLM serving and SGLang-Diffusion) with its RDNA3 plugin, for Radeon PRO W7900 / W7900D (gfx1100).
-# Based on the SGLang image prepared by hk-dsl lane B, without hk-dsl (paused, D-20261112-35).
+# SGLang 0.5.23 (LLM serving) with its RDNA3 plugin, for Radeon PRO W7900 / W7900D (gfx1100).
+# Started from the SGLang image prepared by hk-dsl lane B, without hk-dsl (paused, D-20261112-35). The PyPI sglang
+# wheel only declares CUDA dependencies, so requirements.txt is SGLang's non-CUDA requirements resolved against this
+# base (see its header). SGLang-Diffusion's extra packages are not included yet.
 # The base is the same ROCm PyTorch image as "PyTorch · Stable"; torch, triton and ROCm come from it unchanged.
 FROM 10.5.10.12:1808/radeon-cloud-global/rocm/pytorch@sha256:4449f856653602317e4101a76fce599c7fcd58ccec2e539951fce5f73083179e
 
