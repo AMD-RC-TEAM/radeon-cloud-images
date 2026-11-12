@@ -1,14 +1,15 @@
-"""Download and unpack the SGLang source tarball for a release tag (build-time only).
+"""Download and unpack the SGLang source tarball for a commit or release tag (build-time only).
 
-    python3 fetch_sglang_src.py <version> <dest>
+    python3 fetch_sglang_src.py <commit-sha | version> <dest>
 
 codeload.github.com is reachable from the build cluster; the request is retried because single connections
 to github.com from there drop intermittently.
 """
-import io, os, sys, tarfile, time, urllib.request
+import io, os, re, sys, tarfile, time, urllib.request
 
 version, dest = sys.argv[1], sys.argv[2]
-url = f"https://codeload.github.com/sgl-project/sglang/tar.gz/refs/tags/v{version}"
+ref = version if re.fullmatch(r"[0-9a-f]{40}", version) else f"refs/tags/v{version}"
+url = f"https://codeload.github.com/sgl-project/sglang/tar.gz/{ref}"
 data = None
 for attempt in range(6):
     try:

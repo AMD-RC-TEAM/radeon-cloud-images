@@ -21,3 +21,11 @@ jobs:
           # The org does not let Actions open PRs, so the bot pushes the branch and files an issue with the one-click link.
           gh issue list -S "\"$b\" in:body" --json number -q '.[0].number' | grep -q . || \
             gh issue create --title "${{ steps.c.outputs.title }}" --body "Upstream has a newer version. Upgrade branch \`$b\` is pushed. Open the PR here: $url . Merging releases it: mirror, W7900D smoke, then the stable catalog row (GT, Global, China). Read the upstream release notes first."
+      - if: steps.c.outputs.notice != ''
+        env: {GH_TOKEN: "${{ github.token }}", NOTICE: "${{ steps.c.outputs.notice }}"}
+        run: |
+          # A newer release of a watched package (image.yaml watch_pypi) needs a person: for SGLang, pick the SGLang
+          # commit the new plugin release is validated on, then update the Dockerfile and requirements.txt in a PR.
+          t="Watched package has a new release: ${NOTICE}"
+          gh issue list --state open -S "\"${NOTICE}\" in:title" --json number -q '.[0].number' | grep -q . || \
+            gh issue create --title "${t:0:250}" --body "Newer upstream release of a watched package: ${NOTICE}. For SGLang, find the SGLang commit the new sglang-radeon-rdna3 release is validated on, set SGLANG_COMMIT and SGLANG_VERSION in images/sglang/Dockerfile, re-resolve requirements.txt against the base, and open a PR."
