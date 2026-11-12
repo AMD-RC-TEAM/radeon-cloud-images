@@ -1,52 +1,78 @@
 # radeon-cloud-images
 
-Radeon Cloud 选择器里“稳定行”镜像的唯一来源（owner 决定 D-20261112-26、-27、-28）。**每个镜像都用 Dockerfile 定义，PR 合入 main 就是发布门禁。**
+The single source for the images behind the "stable" rows of the Radeon Cloud image picker
+(owner decisions D-20261112-26, -27, -28, -29). Every image is defined by a Dockerfile, and
+**merging a change to `main` releases it**.
 
-## 结构
+Everything in this repository is written in English: docs, comments, script output, workflow
+names, issues, PRs and commit messages.
+
+## Layout
 ```
 images/<name>/
-  Dockerfile   # 第一行 "# upstream: <registry>/<repo>:<tag>@sha256:..."，FROM 指向无锡 Harbor 里同一个 digest
-  image.yaml   # rc_repo（Harbor 别名仓库）、catalog_row（目录稳定行）、smoke 类别、upstream tag 规则
-  smoke.sh     # 在镜像里跑，1 张 W7900D；成功最后打印 "SMOKE PASS"
+  Dockerfile   # first line "# upstream: <registry>/<repo>:<tag>@sha256:...", FROM points at the same digest in the Wuxi Harbor
+  image.yaml   # rc_repo (Harbor alias repo), catalog_row (the stable row), smoke profile, upstream tag rule
+  smoke.sh     # runs inside the image on one W7900D; prints "SMOKE PASS" last on success
 tools/
-  release.py         # 一个镜像的完整发布：镜像上游 → 冒烟 → rc-current → 目录（GT → Global → 中国站）
-  mirror.sh          # 按 digest 断点续传（无锡出口单连接约 10 分钟会被切断），然后 crane push
+  release.py         # full release of one image: mirror upstream -> smoke -> rc-current -> catalog (GT, Global, China)
+  mirror.sh          # resumable, digest-checked mirror (the Wuxi edge cuts single connections at ~10 min), then crane push
   harbor.py catalog.py upstream_check.py
-  ci/slot_pool.py    # 和 RCI CI 共用的 GPU 槽位租约（从 RCI 复制，需保持一致）
+  ci/slot_pool.py    # CI GPU slot leases shared with Radeon-Cloud-Internal CI (vendored, keep in sync)
 .github/workflows/
-  release.yml        # main 上 images/** 有变化就发布
-  upstream-check.yml # 每天检查上游；有新版本由 bot 推升级分支并开 issue（附一键开 PR 链接；组织不允许 Actions 直接开 PR）
-  rollback.yml       # 手动一键回滚
-  pr-check.yml       # PR 必过：validate + smoke（只冒烟，不改别名和目录）
+  pr-check.yml       # required on every PR: validate + smoke (smoke only; no tag or catalog change)
+  release.yml        # on push to main touching images/**: release the changed images
+  upstream-check.yml # daily: if upstream has a newer tag, push an upgrade branch and open an issue with a one-click PR link
+  rollback.yml       # manual one-click rollback
 ```
 
-## 发布流程（`release.yml`）
-1. **镜像**：Harbor 里还没有上游 digest 时，按 digest 断点续传到 `radeon-cloud-global/<上游 repo>:<tag>`（digest 不变）。节点永远不直连外网拉大镜像。
-2. **冒烟**：用 `tools/ci/slot_pool.py` 领一个 CI 槽位，在槽位命名空间起一个 1 卡 Job（节点 `amd-oneclick.io/workload-ci=enabled`），运行 `smoke.sh`。没有 `SMOKE PASS` 就算失败。
-3. **上别名**：把 digest 服务端复制到 `radeon-cloud-global/rc/<分类>`，原来的 `rc-current` 改名为 `rc-prev`，`rc-current` 指向新 digest。
-4. **上目录**：依次在 GT → Global → 中国站，对 `catalog_row` 那一行调 `POST /api/admin/images/{id}/harbor`（检测 drift）和 `.../harbor/adopt`。**只改稳定行**；adopt 前查 `GET /api/admin/templates`，有模板指向这一行就拒绝。
-5. **失败**：不移动别名、不改目录，在当天的“镜像流水线日报”issue 记一条。
-6. **生产 +1h**：启动失败率比发布前变差就自动回滚（`watch.yml`，首批上生产前补上）。
+## Release flow (`release.yml`)
+1. **Mirror.** If Harbor does not have the upstream digest yet, mirror it to `radeon-cloud-global/<upstream repo>:<tag>`
+   with the digest unchanged. Cluster nodes never pull large images from the internet.
+2. **Smoke.** Claim a CI slot with `tools/ci/slot_pool.py`, run a 1-GPU Job in the slot namespace
+   (nodes labelled `amd-oneclick.io/workload-ci=enabled`) that runs `smoke.sh`. No `SMOKE PASS` means failure.
+   The slot is released only once the Job is confirmed gone; otherwise it is quarantined.
+3. **Alias.** Copy the digest server-side into `radeon-cloud-global/rc/<category>`, move the old `rc-current`
+   to `rc-prev`, and point `rc-current` at the new digest.
+4. **Catalog.** For GT, then Global, then China, call `POST /api/admin/images/{id}/harbor` (drift check) and
+   `.../harbor/adopt` on the `catalog_row`. **Only stable rows are updated.** Before adopting, the release checks
+   `GET /api/admin/templates` and refuses if any template points at that row.
+5. **Failure.** No alias move and no catalog change; one line is added to the day's "image pipeline daily" issue.
+6. **Production +1 h.** If the launch failure rate is worse than before the release, roll back automatically
+   (`watch.yml`, to be added before the first production release).
 
-## 回滚
-Actions → rollback → 填 image 和 sites：`rc-current` 指回 `rc-prev`，再 adopt，约 1 分钟生效。被回退的 digest 留在 `rc-rolled-back`。
+## Rollback
+Actions -> rollback -> image and sites: `rc-current` goes back to `rc-prev`, then adopt; takes about a minute.
+The digest that was rolled back stays tagged `rc-rolled-back`.
 
-## 新增或升级镜像
-- **升级**：改 `Dockerfile` 第一行的 tag@digest 和 `FROM` 的 digest（bot 每天自动开这种 PR），看上游 release notes，合入即发布。
-- **新增**：新建 `images/<name>/`（三个文件），先让 rc-ux 在 Admin 建好跟踪 `rc/<分类>:rc-current` 的稳定行。带 RUN/COPY 的 Dockerfile 会用 Kaniko 构建（第二批支持；SGLang+hk-dsl 由 hk-B 提 PR）。
+## Adding or upgrading an image
+- **Upgrade:** change the tag@digest on the Dockerfile's first line and the `FROM` digest (the daily bot prepares
+  this branch for you), read the upstream release notes, merge.
+- **New image:** add `images/<name>/` with the three files, after rc-ux has created a stable row in Admin that
+  tracks `rc/<category>:rc-current`. Dockerfiles with RUN/COPY steps will be built with Kaniko (second batch;
+  SGLang+hk-dsl comes as a PR from hk-B).
 
-## 凭据（都不进 GitHub）
-放在 runner 所在命名空间 `amd-oneclick-ci-runners` 的 k8s Secret 里，workflow 运行时读到 `$RUNNER_TEMP`，用完即删，不打印：
-- `radeon-images-harbor`（`.dockerconfigjson`）：Harbor robot，只限 `radeon-cloud-global` 项目 push/pull。
-- `radeon-images-catalog`（键 `gt`/`global`/`china`）：各站 scoped operator token，只开放 `GET /api/admin/images`、`GET /api/admin/templates`、`POST /api/admin/images/{image_id}/harbor`、`POST /api/admin/images/{image_id}/harbor/adopt`。有效期 90 天，到期前 14 天在日报 issue 提醒轮换。
+## Credentials (never in GitHub)
+Kept as k8s Secrets in the runner namespace `amd-oneclick-ci-runners`; workflows copy them to `$RUNNER_TEMP` at run
+time and never print them:
+- `radeon-images-harbor` (`.dockerconfigjson`): Harbor robot `radeon-cloud-images-ci`, limited to the
+  `radeon-cloud-global` project (pull/push, artifact read/create, tag create/delete). Expires 180 days from 2026-11-12.
+- `radeon-images-catalog` (keys `gt`/`global`/`china`): one scoped operator token per site, allowed only
+  `GET /api/admin/images`, `GET /api/admin/templates`, `POST /api/admin/images/{image_id}/harbor` and
+  `POST /api/admin/images/{image_id}/harbor/adopt`. 90 days; the daily issue reminds 14 days before expiry.
 
-仓库变量（非机密）：`CATALOG_URL_GT`、`CATALOG_URL_GLOBAL`、`CATALOG_URL_CHINA`（集群内各站 manager 的地址）。
+Repository variables (not secret): `CATALOG_URL_GT`, `CATALOG_URL_GLOBAL`, `CATALOG_URL_CHINA` (in-cluster
+manager URLs of each site).
 
 ## Runner
-集群内一个只服务本仓库的 runner（label `radeon-images`，`amd-oneclick-ci-runners` 命名空间，用 `gh-runner` 服务账号，所以有 CI 槽位租约和槽位命名空间的权限）。注册只用一次性的 registration token，集群里只保存 runner 自己的凭据，不存 PAT。
+One in-cluster runner that serves only this repository (label `radeon-images`, namespace `amd-oneclick-ci-runners`,
+service account `gh-runner`, so it has the CI slot lease and slot namespace permissions). It was registered once
+with a one-time registration token; the cluster stores only the runner's own credentials, no PAT.
 
-## 分支保护（main）
-合入只看 CI（D-20261112-29）：必须通过 `pr-check` 的 `validate`（解析所有镜像和 workflow）和 `smoke`（改动过的镜像在 W7900D 上冒烟），不要求人工审批；CODEOWNERS 只用来通知。不允许直接推送，管理员也不例外；禁止强推和删除分支。
+## Branch protection (`main`)
+Merging is gated by CI (D-20261112-29): `pr-check` must pass `validate` (parses every image and workflow) and
+`smoke` (changed images on a W7900D). No human approval is required; CODEOWNERS is for notification only.
+No direct pushes, admins included; no force pushes or branch deletion.
 
-## 状态
-首批：PyTorch 稳定版、PyTorch 最新版、vLLM。第二批：Base、Unsloth、SGLang+hk-dsl（hk-B）。llama.cpp、ComfyUI 后续再加。
+## Status
+First batch: PyTorch stable, PyTorch latest, vLLM. Second batch: Base, Unsloth, SGLang+hk-dsl (hk-B).
+llama.cpp and ComfyUI later.

@@ -45,6 +45,6 @@ jobs:
         if: failure()
         env: {GH_TOKEN: "${{ github.token }}"}
         run: |
-          t="镜像流水线日报 $(date -u +%F)"; n=$(gh issue list -S "\"$t\" in:title" --json number -q '.[0].number')
-          [ -n "$n" ] || n=$(gh issue create -t "$t" -b "每日一条：失败的发布不会更新目录。" | grep -oE '[0-9]+$')
-          gh issue comment "$n" -b "❌ ${{ matrix.image }} 发布失败，目录未更新：${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          t="Image pipeline daily $(date -u +%F)"; n=$(gh issue list -S "\"$t\" in:title" --json number -q '.[0].number')
+          [ -n "$n" ] || n=$(gh issue create -t "$t" -b "One issue per day. A failed release does not change the catalog." | grep -oE '[0-9]+$')
+          gh issue comment "$n" -b "${{ matrix.image }}: release failed, catalog not changed: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"

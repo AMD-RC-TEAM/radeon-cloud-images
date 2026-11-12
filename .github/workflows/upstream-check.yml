@@ -20,4 +20,4 @@ jobs:
           url="${{ github.server_url }}/${{ github.repository }}/compare/main...$b?expand=1"
           # The org does not let Actions open PRs, so the bot pushes the branch and files an issue with the one-click link.
           gh issue list -S "\"$b\" in:body" --json number -q '.[0].number' | grep -q . || \
-            gh issue create --title "${{ steps.c.outputs.title }}" --body "上游有新版本，升级分支 \`$b\` 已推送。点这里开 PR：$url 。合入即发布：镜像 → W7900D 冒烟 → 更新目录稳定行（GT → Global → 中国站）。请先看上游 release notes。"
+            gh issue create --title "${{ steps.c.outputs.title }}" --body "Upstream has a newer version. Upgrade branch \`$b\` is pushed. Open the PR here: $url . Merging releases it: mirror, W7900D smoke, then the stable catalog row (GT, Global, China). Read the upstream release notes first."
