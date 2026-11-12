@@ -15,8 +15,10 @@ if [ ! -f "$MODEL/config.json" ]; then
   python3 -c 'import sys; from huggingface_hub import snapshot_download as s; s("Qwen/Qwen2.5-0.5B-Instruct", local_dir=sys.argv[1])' "$MODEL"
 fi
 LOG=$(mktemp)
+# The RDNA3 plugin's known-good serving flags (sglang-rdna3 serve-args): the Triton attention backend (aiter, fa3 and
+# flashinfer are CDNA- or CUDA-only), no HIP graph capture (it hangs on gfx1100), bf16. Templates must pass the same.
 setsid sglang serve --model-path "$MODEL" --served-model-name smoke --host 127.0.0.1 --port "$PORT" \
-  --mem-fraction-static 0.5 > "$LOG" 2>&1 &
+  --attention-backend triton --disable-cuda-graph --dtype bfloat16 --mem-fraction-static 0.5 > "$LOG" 2>&1 &
 SP=$!
 for i in $(seq 1 120); do
   curl -sf -m 2 "http://127.0.0.1:$PORT/health" > /dev/null && break
