@@ -1,6 +1,7 @@
 # Generated 11-12/13 by resolving SGLang 0.5.23's non-CUDA requirements (pip --dry-run --report) against this
 # base image, with its torch, triton and numpy as constraints. CUDA-only packages (flashinfer, nvidia-*, sgl-*, deep-ep,
-# tilelang, torch*) and mistral_common (needs numpy<2.4) are left out. Installed with --no-deps.
+# tilelang, torch*) and mistral_common (needs numpy<2.4) are left out. Installed with --no-deps. SGLang itself is built
+# from its source tarball (Dockerfile), because the PyPI wheel omits the kernel sources.
 aiohappyeyeballs==2.7.1
 aiohttp==3.14.5
 aiosignal==1.4.0
@@ -127,5 +128,6 @@ xgrammar==0.2.7
 xxhash==4.1.0
 yarl==1.25.1
 zstandard==0.25.0
-sglang==0.5.23
 sglang-radeon-rdna3==0.2.0
+kernels-data==0.16.2
+setuptools-scm==9.2.2

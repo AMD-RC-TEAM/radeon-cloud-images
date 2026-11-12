@@ -8,6 +8,7 @@ PORT=30000
 grep -m1 -E 'gfx1100' <<<"$(rocminfo)"
 python3 -c 'import sglang, torch; print("sglang", sglang.__version__, "torch", torch.__version__); assert torch.cuda.is_available()'
 python3 -c 'import importlib.metadata as m; print("sglang-radeon-rdna3", m.version("sglang-radeon-rdna3"))'
+python3 -c 'import sgl_kernel, os; print("sgl_kernel", os.path.dirname(sgl_kernel.__file__))'
 if [ ! -f "$MODEL/config.json" ]; then
   MODEL=$(mktemp -d)/Qwen2.5-0.5B-Instruct
   echo "downloading Qwen/Qwen2.5-0.5B-Instruct via ${HF_ENDPOINT:-huggingface.co}"
