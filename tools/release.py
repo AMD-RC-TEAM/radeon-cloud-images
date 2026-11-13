@@ -30,28 +30,42 @@ def sh(*cmd, check=True, **kw):
     return r.stdout
 
 
+FROM_RE = re.compile(r"^FROM\s+(?P<ref>(?P<registry>[^/\s]+)/(?P<repo>\S+?):(?P<tag>[^:@/\s]+)@(?P<digest>sha256:[0-9a-f]{64}))\s*$", re.M)
+
+
 def parse(image):
+    """images/<image>/Dockerfile must FROM the real public upstream, pinned: FROM <registry>/<repo>:<tag>@sha256:<digest>.
+    The tooling mirrors that digest into Harbor on demand and builds/smokes from the Harbor copy, so cluster nodes
+    never pull from the internet. Hand-written Harbor paths are refused."""
     d = os.path.join(ROOT, "images", image)
     df = open(os.path.join(d, "Dockerfile")).read()
-    up = re.search(r"^# upstream: ([^/\s]+)/(\S+?):([^:@/\s]+)@(sha256:[0-9a-f]{64})", df, re.M)
-    frm = re.search(r"^FROM\s+(\S+)", df, re.M)
-    if not up or not frm:
-        raise SystemExit("Dockerfile needs a '# upstream: <registry>/<repo>:<tag>@sha256:...' line and a FROM")
+    frm = FROM_RE.search(df)
+    if not frm:
+        raise SystemExit(f"{image}: the Dockerfile needs 'FROM <registry>/<repo>:<tag>@sha256:<digest>' "
+                         "(the public upstream, e.g. docker.io/rocm/pytorch:<tag>@sha256:...)")
+    if frm["registry"].startswith(("10.5.10.12", "36.150.116.202")) or len(FROM_RE.findall(df)) > 1:
+        raise SystemExit(f"{image}: FROM must name the public upstream once, not our Harbor (the tooling mirrors it)")
     build_steps = [l for l in df.splitlines() if l.strip() and not l.lstrip().startswith("#") and not l.startswith("FROM")]
     cfg = {}
     for l in open(os.path.join(d, "image.yaml")):
         m = re.match(r"^(\w+):\s*(.*?)\s*(?:#.*)?$", l)
         if m and m.group(2):
             cfg[m.group(1)] = m.group(2).strip("'\"")
-    mirror_repo = frm.group(1).split("@")[0].replace(PULL + "/", "")
-    return {"dir": d, "registry": up.group(1), "repo": up.group(2), "tag": up.group(3), "digest": up.group(4),
-            "from": frm.group(1), "mirror_repo": mirror_repo, "build": bool(build_steps), **cfg}
+    reg = frm["registry"]
+    mirror_repo = frm["repo"] if reg == "docker.io" else f"{reg}/{frm['repo']}"
+    harbor_ref = f"{PULL}/{mirror_repo}@{frm['digest']}"
+    return {"dir": d, "registry": reg, "repo": frm["repo"], "tag": frm["tag"], "digest": frm["digest"],
+            "from": frm["ref"], "mirror_repo": mirror_repo, "harbor_ref": harbor_ref,
+            "build_dockerfile": df.replace(frm["ref"], harbor_ref, 1), "build": bool(build_steps), **cfg}
 
 
 def ensure_mirror(m):
     if harbor.artifact(m["mirror_repo"], m["digest"]):
         print(f"mirror: {m['mirror_repo']}@{m['digest'][:19]} already in Harbor")
         return
+    if m["registry"] != "docker.io":
+        raise SystemExit(f"{m['registry']}/{m['repo']}@{m['digest'][:19]} is not in Harbor and only Docker Hub upstreams are "
+                         f"mirrored automatically; copy it into radeon-cloud-global/{m['mirror_repo']} first (rc-ops)")
     out = tempfile.mkdtemp(prefix="mirror-")
     target = f"{PUSH}/{m['mirror_repo']}:{m['tag']}"
     print(f"mirror: fetching {m['repo']}@{m['digest'][:19]} -> {target}")
@@ -69,7 +83,12 @@ def context_files(m):
 def context_tag(m):
     h = hashlib.sha256()
     for f in context_files(m):
-        h.update(f.encode() + b"\0" + open(os.path.join(m["dir"], f), "rb").read() + b"\0")
+        if f == "Dockerfile":   # what is built: FROM rewritten to Harbor; comments and blank lines do not matter
+            data = "\n".join(l for l in m["build_dockerfile"].splitlines()
+                             if l.strip() and not l.lstrip().startswith("#")).encode()
+        else:
+            data = open(os.path.join(m["dir"], f), "rb").read()
+        h.update(f.encode() + b"\0" + data + b"\0")
     return "ctx-" + h.hexdigest()[:20]
 
 
@@ -84,7 +103,12 @@ def build(m):
     buf = io.BytesIO()
     with tarfile.open(fileobj=buf, mode="w:gz") as t:
         for f in context_files(m):
-            t.add(os.path.join(m["dir"], f), arcname=f)
+            if f == "Dockerfile":
+                data = m["build_dockerfile"].encode()
+                ti = tarfile.TarInfo("Dockerfile"); ti.size = len(data); ti.mode = 0o644
+                t.addfile(ti, io.BytesIO(data))
+            else:
+                t.add(os.path.join(m["dir"], f), arcname=f)
     tmp = tempfile.mkdtemp(prefix="ctx-")
     with open(os.path.join(tmp, "context.tar.gz"), "wb") as f:
         f.write(buf.getvalue())

@@ -7,10 +7,12 @@ The single source for the images behind the "stable" rows of the Radeon Cloud im
 Everything in this repository is written in English: docs, comments, script output, workflow
 names, issues, PRs and commit messages.
 
+**To upgrade an image or add one, see [CONTRIBUTING.md](CONTRIBUTING.md).**
+
 ## Layout
 ```
 images/<name>/
-  Dockerfile   # first line "# upstream: <registry>/<repo>:<tag>@sha256:...", FROM points at the same digest in the Wuxi Harbor
+  Dockerfile   # FROM <public upstream>:<tag>@sha256:... (never our Harbor); the pipeline mirrors it and builds from Harbor
   image.yaml   # rc_repo (Harbor alias repo), catalog_row (the stable row), smoke profile, upstream tag rule
   smoke.sh     # runs inside the image on one W7900D; prints "SMOKE PASS" last on success
 tools/
@@ -21,7 +23,7 @@ tools/
 .github/workflows/
   pr-check.yml       # required on every PR: validate + smoke (smoke only; no tag or catalog change)
   release.yml        # on push to main touching images/**: release the changed images
-  upstream-check.yml # daily: if upstream has a newer tag, push an upgrade branch and open an issue with a one-click PR link
+  upstream-check.yml # daily: if upstream has a newer tag, push an upgrade branch (the FROM line) and open an issue with a one-click PR link
   rollback.yml       # manual one-click rollback
 ```
 
@@ -74,8 +76,8 @@ Actions -> rollback -> image: `rc-current` goes back to `rc-prev`; the catalog j
 The digest that was rolled back stays tagged `rc-rolled-back`.
 
 ## Adding or upgrading an image
-- **Upgrade:** change the tag@digest on the Dockerfile's first line and the `FROM` digest (the daily bot prepares
-  this branch for you), read the upstream release notes, merge.
+- **Upgrade:** change the `FROM` line's tag@digest (the daily bot prepares this branch for you), read the upstream
+  release notes, merge. See CONTRIBUTING.md.
 - **New image:** add `images/<name>/` with the three files, after rc-ux has created a stable row in Admin that
   tracks `rc/<category>:rc-current`.
 - **Images with build steps** (RUN/COPY, for example `sglang`) are built with Kaniko in the runner namespace, with

@@ -1,6 +1,5 @@
-# upstream: docker.io/rocm/pytorch:rocm10.1.0_ubuntu24.04_py3.12_pytorch_release_2.14.0@sha256:099f59a3bee9c436f5cc57db6bc6076fdeda579c57e9e22ae40f856d5905b3e4
-# Built with Kaniko on top of the mirrored upstream image (same digest as upstream for the base layers).
-FROM 10.5.10.12:1808/radeon-cloud-global/rocm/pytorch@sha256:099f59a3bee9c436f5cc57db6bc6076fdeda579c57e9e22ae40f856d5905b3e4
+# The public upstream image, pinned by digest; the pipeline mirrors it into Harbor and builds/smokes from there.
+FROM docker.io/rocm/pytorch:rocm10.1.0_ubuntu24.04_py3.12_pytorch_release_2.14.0@sha256:099f59a3bee9c436f5cc57db6bc6076fdeda579c57e9e22ae40f856d5905b3e4
 
 # The build sets this to a PyPI mirror reachable from the build cluster; it is not kept in the image.
 ARG PIP_INDEX_URL

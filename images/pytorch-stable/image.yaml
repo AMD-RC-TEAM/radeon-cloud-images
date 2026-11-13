@@ -3,7 +3,5 @@ name: pytorch-stable
 rc_repo: rc/pytorch-stable               # Harbor: 10.5.10.12:1808/radeon-cloud-global/rc/pytorch-stable:rc-current is what the catalog stable row tracks
 catalog_row: "PyTorch · 稳定"           # the stable catalog row only; template rows are never touched
 smoke: pytorch                 # which smoke profile images/pytorch-stable/smoke.sh runs (see README)
-upstream:
-  registry: docker.io
-  repo: rocm/pytorch
+upstream:            # the registry/repo come from the Dockerfile's FROM line
   tag_regex: '^rocm7\.[0-9]+\.[0-9]+_ubuntu24\.04_py3\.12_pytorch_release_2\.[0-9]+\.[0-9]+$'         # the upgrade bot proposes the newest tag matching this
