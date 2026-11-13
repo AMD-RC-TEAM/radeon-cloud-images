@@ -5,6 +5,8 @@
 set -euo pipefail
 . "$(dirname "$0")/smoke_lib.sh"
 jupyterlab_fast_path
+welcome_once
+welcome_jupyter_terminal
 MODEL=${SMOKE_MODEL_DIR:-/models/Qwen2.5-0.5B-Instruct}
 PORT=30000
 grep -m1 -E 'gfx1100' <<<"$(rocminfo)"

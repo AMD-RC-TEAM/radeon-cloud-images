@@ -4,6 +4,8 @@
 set -euo pipefail
 . "$(dirname "$0")/smoke_lib.sh"
 jupyterlab_fast_path
+welcome_once
+welcome_jupyter_terminal
 MODEL=${SMOKE_MODEL_DIR:-/models/Qwen2.5-0.5B-Instruct}
 grep -m1 -E 'gfx11[0-9]{2}' <<<"$(rocminfo)"
 python3 -c 'import vllm, torch; print("vllm", vllm.__version__, "torch", torch.__version__); assert torch.cuda.is_available()'
