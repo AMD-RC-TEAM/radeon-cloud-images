@@ -3,6 +3,8 @@
 # answers one chat request. The model comes from SMOKE_MODEL_DIR if it is mounted, otherwise it is downloaded
 # through $HF_ENDPOINT (the smoke Job points it at a mirror reachable from the cluster).
 set -euo pipefail
+. "$(dirname "$0")/smoke_lib.sh"
+jupyterlab_fast_path
 MODEL=${SMOKE_MODEL_DIR:-/models/Qwen2.5-0.5B-Instruct}
 PORT=30000
 grep -m1 -E 'gfx1100' <<<"$(rocminfo)"

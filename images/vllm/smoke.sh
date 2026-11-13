@@ -2,6 +2,8 @@
 # Smoke for vLLM images on one W7900D: start the server on a small cached model and get one completion.
 # The model comes from SMOKE_MODEL_DIR if mounted, otherwise it is downloaded through $HF_ENDPOINT (set by the smoke Job).
 set -euo pipefail
+. "$(dirname "$0")/smoke_lib.sh"
+jupyterlab_fast_path
 MODEL=${SMOKE_MODEL_DIR:-/models/Qwen2.5-0.5B-Instruct}
 grep -m1 -E 'gfx11[0-9]{2}' <<<"$(rocminfo)"
 python3 -c 'import vllm, torch; print("vllm", vllm.__version__, "torch", torch.__version__); assert torch.cuda.is_available()'

@@ -167,7 +167,8 @@ def smoke(m, candidate):
 
 def _smoke_in(ns, m, candidate):
     name = f"rcimg-smoke-{m['name']}-{int(time.time())}"[:62]
-    cm = sh("kubectl", "-n", ns, "create", "configmap", name, f"--from-file=smoke.sh={m['dir']}/smoke.sh", "-o", "name")
+    cm = sh("kubectl", "-n", ns, "create", "configmap", name, f"--from-file=smoke.sh={m['dir']}/smoke.sh",
+            f"--from-file=smoke_lib.sh={ROOT}/tools/smoke_lib.sh", "-o", "name")
     job = {"apiVersion": "batch/v1", "kind": "Job",
            "metadata": {"name": name, "namespace": ns, "labels": {"app.kubernetes.io/part-of": "radeon-cloud-images"}},
            "spec": {"backoffLimit": 0, "activeDeadlineSeconds": 1800, "ttlSecondsAfterFinished": 3600, "template": {"spec": {

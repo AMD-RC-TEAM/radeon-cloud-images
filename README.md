@@ -41,6 +41,14 @@ tools/
    previous digest and the daily issue says why.
 6. **Failure anywhere:** nothing further moves; one line in the day's "image pipeline daily" issue.
 
+## JupyterLab in every stable image
+Radeon Cloud's launch step checks the image for `jupyter` on PATH, Python 3.10-3.12, `jupyter_server` >=2.14,<3 and
+`jupyterlab` >=4.2,<5. If they are missing, it pip-installs JupyterLab on every launch (measured 18-188 s, 11-13).
+So every image here carries a pinned JupyterLab. Images that do not already include one get it from
+`add_jupyterlab.sh`, which pins everything already installed as a constraint (nothing existing may change). Their
+digests are therefore our own builds on top of the mirrored upstream image, not the upstream digest itself. Each
+smoke checks the fast path and that the Jupyter layer changed no existing package (`tools/smoke_lib.sh`).
+
 ## Templates
 **Point templates at a fixed-version image row, not at a stable row.** Stable rows move with this pipeline.
 Updating a template's image is done by the template's owner, by hand in Admin, and tested by them (D-20261112-39).

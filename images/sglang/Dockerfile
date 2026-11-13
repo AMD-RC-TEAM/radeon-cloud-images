@@ -35,6 +35,11 @@ RUN SP=$(python3 -c "import sysconfig; print(sysconfig.get_paths()['purelib'])")
  && install -D -m 644 /tmp/rc/README.md /opt/sglang/README.md \
  && rm -rf /tmp/rc
 
+# Radeon Cloud's launch step pip-installs JupyterLab into any image that lacks a compatible one (18-188 s per launch).
+# Bake it in, pinned, without changing anything already installed (add_jupyterlab.sh; the smoke verifies both).
+COPY add_jupyterlab.sh /tmp/add_jupyterlab.sh
+RUN sh /tmp/add_jupyterlab.sh && rm -f /tmp/add_jupyterlab.sh
+
 # SGLang imports aiter unconditionally on ROCm (quark MXFP4 schemes); the plugin stubs its CDNA-only kernels.
 # aiter is installed for that import only: its kernels stay off (SGLANG_USE_AITER=0, no aiter RoPE).
 ENV GPU_ARCHS=gfx1100 \
