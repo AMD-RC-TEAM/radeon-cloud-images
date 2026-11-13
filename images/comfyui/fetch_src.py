@@ -1,10 +1,9 @@
-"""Download a pinned file at build time, with retries (connections to github.com from the build cluster drop
-intermittently), and check its sha256 when one is given.
+"""Download a pinned GitHub source tarball at build time, with retries (connections to github.com from the build
+cluster drop intermittently).
 
-    python3 fetch_src.py tar <owner/repo> <40-hex commit> <dest dir>    # source tarball from codeload.github.com
-    python3 fetch_src.py file <url> <sha256> <dest file>
+    python3 fetch_src.py tar <owner/repo> <40-hex commit> <dest dir>
 """
-import hashlib, io, os, re, sys, tarfile, time, urllib.request
+import io, os, re, sys, tarfile, time, urllib.request
 
 
 def get(url):
@@ -29,14 +28,5 @@ if kind == "tar":
         t.extractall(parent, filter="data")
     os.rename(os.path.join(parent, root), dest)
     print(f"{repo}@{commit[:12]}: {len(data)} bytes -> {dest}")
-elif kind == "file":
-    url, sha, dest = sys.argv[2:5]
-    data = get(url)
-    got = hashlib.sha256(data).hexdigest()
-    if got != sha:
-        sys.exit(f"sha256 mismatch for {url}: {got}")
-    with open(dest, "wb") as f:
-        f.write(data)
-    print(f"{url}: {len(data)} bytes, sha256 ok -> {dest}")
 else:
     sys.exit(__doc__)

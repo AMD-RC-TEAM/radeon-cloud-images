@@ -1,0 +1,4 @@
+#!/bin/sh
+# Start ComfyUI on 0.0.0.0:${COMFY_PORT:-8188}. Extra arguments go to ComfyUI (e.g. --lowvram).
+# Models: /opt/ComfyUI/models (checkpoints/, loras/, vae/, ...); outputs: /opt/ComfyUI/output.
+cd /opt/ComfyUI && exec python3 main.py --listen 0.0.0.0 --port "${COMFY_PORT:-8188}" "$@"
