@@ -12,5 +12,6 @@ RC_WELCOME_DONE=1
   printf 'Radeon Cloud: %s\n' "$(head -n1 /etc/rc-image.txt 2>/dev/null || echo 'GPU instance (Radeon PRO W7900D)')"
   [ -r /etc/rc-welcome-tunnel.txt ] && cat /etc/rc-welcome-tunnel.txt
   [ -r /etc/rc-image-readme.txt ] && cat /etc/rc-image-readme.txt
+  [ -r /etc/rc-welcome-extra.txt ] && cat /etc/rc-welcome-extra.txt
   printf 'Hide this message: touch ~/.rc-welcome-hidden\n'
 } 2>/dev/null
