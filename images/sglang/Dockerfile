@@ -1,4 +1,3 @@
-# upstream: docker.io/rocm/pytorch:rocm7.2.4_ubuntu24.04_py3.12_pytorch_release_2.10.0@sha256:4449f856653602317e4101a76fce599c7fcd58ccec2e539951fce5f73083179e
 # SGLang (LLM serving) with the RDNA3 plugin, for Radeon PRO W7900 / W7900D (gfx1100), following the plugin's
 # documented install (github.com/AMD-AIM/sglang-radeon, docs/installation.md): SGLang from source, its non-CUDA
 # requirements, the plugin, and sgl-kernel built for gfx1100. hk-dsl is not included (paused, D-20261112-35).
@@ -9,7 +8,7 @@
 # longer apply and it refuses to build. This is the newest SGLang that works on gfx1100 today. Upgrade when a plugin
 # release supports newer SGLang: the upgrade bot watches the plugin on PyPI (image.yaml watch_pypi).
 # SGLang-Diffusion's extra packages are not included yet.
-FROM 10.5.10.12:1808/radeon-cloud-global/rocm/pytorch@sha256:4449f856653602317e4101a76fce599c7fcd58ccec2e539951fce5f73083179e
+FROM docker.io/rocm/pytorch:rocm7.2.4_ubuntu24.04_py3.12_pytorch_release_2.10.0@sha256:4449f856653602317e4101a76fce599c7fcd58ccec2e539951fce5f73083179e
 
 # The build sets this to a PyPI mirror reachable from the build cluster; it is not kept in the image.
 ARG PIP_INDEX_URL

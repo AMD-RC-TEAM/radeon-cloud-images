@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Upgrade bot: for each image, find the newest upstream tag matching image.yaml tag_regex; if it differs from the
-Dockerfile's `# upstream:` line, rewrite the upstream line and the FROM digest and print the branch/title for the
-workflow to open a PR. Never touches the catalog; merging the PR is the release gate (D-20261112-27).
+Dockerfile's `FROM <registry>/<repo>:<tag>@sha256:...` line, rewrite that line (tag and digest) and print the
+branch/title for the workflow to open a PR. The PR is the same one-line change a developer would make by hand. Never touches the catalog; merging the PR is the release gate (D-20261112-27).
 
   upstream_check.py [--write]     # without --write only reports
 """
@@ -58,11 +58,12 @@ def main():
     for image in sorted(os.listdir(os.path.join(ROOT, "images"))):
         d = os.path.join(ROOT, "images", image)
         y = open(os.path.join(d, "image.yaml")).read()
-        repo = re.search(r"^\s+repo:\s*(\S+)", y, re.M).group(1)
         rx = re.search(r"^\s+tag_regex:\s*'([^']+)'", y, re.M).group(1)
         dfp = os.path.join(d, "Dockerfile"); df = open(dfp).read()
-        cur = re.search(r"^# upstream: \S+?/\S+?:([^:@/\s]+)@(sha256:[0-9a-f]{64})", df, re.M)
-        registry = re.search(r"^\s+registry:\s*(\S+)", y, re.M).group(1)
+        cur = re.search(r"^FROM\s+(?P<registry>[^/\s]+)/(?P<repo>\S+?):(?P<tag>[^:@/\s]+)@(?P<digest>sha256:[0-9a-f]{64})", df, re.M)
+        if not cur:
+            print(f"{image}: no pinned FROM line"); continue
+        registry, repo = cur["registry"], cur["repo"]
         if registry != "docker.io":
             print(f"{image}: upstream {registry} is not on Docker Hub; upgrades are hand-made PRs")
             continue
@@ -70,12 +71,12 @@ def main():
         if not tags:
             print(f"{image}: no upstream tag matches {rx}"); continue
         best = max(tags, key=lambda t: version_key(t[0]))
-        if (best[0], best[1]) == (cur.group(1), cur.group(2)):
+        if (best[0], best[1]) == (cur["tag"], cur["digest"]):
             print(f"{image}: up to date ({best[0]})"); continue
-        print(f"{image}: {cur.group(1)} -> {best[0]} ({best[1][:19]})")
-        changes.append(f"{image} {cur.group(1)} -> {best[0]}")
+        print(f"{image}: {cur['tag']} -> {best[0]} ({best[1][:19]})")
+        changes.append(f"{image} {cur['tag']} -> {best[0]}")
         if write:
-            df = df.replace(f":{cur.group(1)}@{cur.group(2)}", f":{best[0]}@{best[1]}").replace(f"@{cur.group(2)}", f"@{best[1]}")
+            df = df.replace(f"{registry}/{repo}:{cur['tag']}@{cur['digest']}", f"{registry}/{repo}:{best[0]}@{best[1]}", 1)
             open(dfp, "w").write(df)
     if notices and os.environ.get("GITHUB_OUTPUT"):
         with open(os.environ["GITHUB_OUTPUT"], "a") as f:
