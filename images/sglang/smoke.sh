@@ -19,7 +19,10 @@ PY
 if [ ! -f "$MODEL/config.json" ]; then
   MODEL=$(mktemp -d)/Qwen2.5-0.5B-Instruct
   echo "downloading Qwen/Qwen2.5-0.5B-Instruct via ${HF_ENDPOINT:-huggingface.co}"
-  python3 -c 'import sys; from huggingface_hub import snapshot_download as s; s("Qwen/Qwen2.5-0.5B-Instruct", local_dir=sys.argv[1])' "$MODEL"
+  for attempt in 1 2 3; do   # a slow mirror read must not fail the smoke (11-13: hf-mirror errors on .gitattributes/LICENSE)
+    HF_HUB_DOWNLOAD_TIMEOUT=60 python3 -c 'import sys; from huggingface_hub import snapshot_download as s; s("Qwen/Qwen2.5-0.5B-Instruct", local_dir=sys.argv[1])' "$MODEL" && break
+    echo "download attempt $attempt failed; retrying"; sleep 10
+  done
 fi
 LOG=$(mktemp)
 # Exactly what a user types: no RDNA3 flags. The image's defaults (rc_sglang_defaults) must make this work.
@@ -57,7 +60,7 @@ for i in $(seq 1 240); do
   sleep 5
 done
 curl -sf -m 2 "http://127.0.0.1:$DPORT/health" > /dev/null || { tail -60 "$DLOG"; echo "FAIL: diffusion server did not start"; exit 1; }
-python3 - "$DPORT" <<'PY'
+if ! python3 - "$DPORT" <<'PY'
 import base64, io, json, sys, time, urllib.request
 port = sys.argv[1]
 body = {"model": "Qwen/Qwen-Image-2.1", "prompt": "a red apple on a wooden table, studio photo", "size": "512x512", "n": 1,
@@ -79,6 +82,12 @@ sd = ImageStat.Stat(im.convert("L")).stddev[0]
 print(f"sglang diffusion: Qwen-Image-2.1 {im.size[0]}x{im.size[1]} in {time.time() - t0:.0f}s -> {path}, luminance stddev {sd:.1f}")
 assert sd > 10, "blank image"
 PY
+then
+  echo "FAIL: image generation; diffusion server log (errors and last lines):"
+  grep -iE "error|exception|traceback|out of memory|hip" "$DLOG" | tail -40
+  tail -60 "$DLOG"
+  exit 1
+fi
 grep -iE "memory|vram|GiB" "$DLOG" | tail -3 || true
 kill -- -"$DP" 2>/dev/null || true
 echo "SMOKE PASS"
