@@ -62,6 +62,10 @@ def main():
         rx = re.search(r"^\s+tag_regex:\s*'([^']+)'", y, re.M).group(1)
         dfp = os.path.join(d, "Dockerfile"); df = open(dfp).read()
         cur = re.search(r"^# upstream: \S+?/\S+?:([^:@/\s]+)@(sha256:[0-9a-f]{64})", df, re.M)
+        registry = re.search(r"^\s+registry:\s*(\S+)", y, re.M).group(1)
+        if registry != "docker.io":
+            print(f"{image}: upstream {registry} is not on Docker Hub; upgrades are hand-made PRs")
+            continue
         tags = hub_tags(repo, rx)
         if not tags:
             print(f"{image}: no upstream tag matches {rx}"); continue

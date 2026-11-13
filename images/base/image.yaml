@@ -1,0 +1,9 @@
+# Release settings for this image (read by tools/release.py and tools/upstream_check.py).
+name: base
+rc_repo: rc/base               # Harbor: 10.5.10.12:1808/radeon-cloud-global/rc/base:rc-current is what the catalog stable row tracks
+catalog_row: "Base"           # the stable catalog row only; template rows are never touched
+smoke: base                 # images/base/smoke.sh
+upstream:
+  registry: crpi-xhg6joi134vrkpzq.cn-shanghai.personal.cr.aliyuncs.com
+  repo: vivienfanghua/amd-oneclick-base
+  tag_regex: '^git-proxy-.*$'         # not on Docker Hub: the upgrade bot skips it; upgrades are hand-made PRs

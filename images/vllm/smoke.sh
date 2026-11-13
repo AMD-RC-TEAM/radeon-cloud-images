@@ -19,4 +19,8 @@ OUT=$(curl -sf http://127.0.0.1:18000/v1/completions -H 'Content-Type: applicati
   -d '{"model":"smoke","prompt":"The capital of France is","max_tokens":8,"temperature":0}')
 echo "$OUT"
 echo "$OUT" | python3 -c 'import json,sys; t=json.load(sys.stdin)["choices"][0]["text"]; assert t.strip(), "empty completion"; print("completion:", t)'
+# The hk-dsl README quick start on this image (pip install hk-dsl && vllm serve Qwen/Qwen3-8B, one completion):
+# guards the 11-13 regression where hk's plugin pulled aiter into the engine on gfx1100.
+pkill -f "vllm serve" 2>/dev/null || true; sleep 5
+(cd "$(mktemp -d)" && HK_VERSION=0.9.21 bash "$(dirname "$0")/hk_readme_smoke.sh")
 echo "SMOKE PASS"
