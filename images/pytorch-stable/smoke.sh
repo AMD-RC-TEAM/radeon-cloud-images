@@ -3,6 +3,8 @@
 # Same checks rc-ux runs by hand (11-12): exactly one GPU visible with a PCI bus id, gfx1100, fp16 matmul,
 # and a few training steps whose loss goes down. Any failure means rc-current does not move.
 set -euo pipefail
+. "$(dirname "$0")/smoke_lib.sh"
+jupyterlab_fast_path
 echo "== rocminfo"; grep -m1 -E 'gfx1100' <<<"$(rocminfo)"
 echo "== torch"
 python3 - <<'PY'
