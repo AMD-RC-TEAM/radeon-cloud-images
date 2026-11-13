@@ -168,10 +168,11 @@ def smoke(m, candidate):
 def _smoke_in(ns, m, candidate):
     name = f"rcimg-smoke-{m['name']}-{int(time.time())}"[:62]
     cm = sh("kubectl", "-n", ns, "create", "configmap", name, f"--from-file=smoke.sh={m['dir']}/smoke.sh",
-            f"--from-file=smoke_lib.sh={ROOT}/tools/smoke_lib.sh", "-o", "name")
+            f"--from-file=smoke_lib.sh={ROOT}/tools/smoke_lib.sh",
+            f"--from-file=hk_readme_smoke.sh={ROOT}/tools/hk_readme_smoke.sh", "-o", "name")
     job = {"apiVersion": "batch/v1", "kind": "Job",
            "metadata": {"name": name, "namespace": ns, "labels": {"app.kubernetes.io/part-of": "radeon-cloud-images"}},
-           "spec": {"backoffLimit": 0, "activeDeadlineSeconds": 1800, "ttlSecondsAfterFinished": 3600, "template": {"spec": {
+           "spec": {"backoffLimit": 0, "activeDeadlineSeconds": 3600, "ttlSecondsAfterFinished": 3600, "template": {"spec": {
                "restartPolicy": "Never",
                "nodeSelector": {"amd-oneclick.io/workload-ci": "enabled"},
                "containers": [{"name": "smoke", "image": candidate, "command": ["/bin/bash", "/smoke/smoke.sh"],
@@ -183,7 +184,7 @@ def _smoke_in(ns, m, candidate):
                "volumes": [{"name": "smoke", "configMap": {"name": name}}]}}}}
     subprocess.run(["kubectl", "apply", "-f", "-"], input=json.dumps(job), text=True, check=True, capture_output=True)
     try:
-        r = subprocess.run(["kubectl", "-n", ns, "wait", f"job/{name}", "--for=condition=complete", "--timeout=1800s"],
+        r = subprocess.run(["kubectl", "-n", ns, "wait", f"job/{name}", "--for=condition=complete", "--timeout=3700s"],
                            text=True, capture_output=True)
         logs = sh("kubectl", "-n", ns, "logs", f"job/{name}", "--tail=200", check=False)
         print(logs)
