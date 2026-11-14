@@ -74,20 +74,27 @@ def ensure_mirror(m):
         raise SystemExit("mirror failed or digest not in Harbor afterwards")
 
 
+WELCOME_DIR = os.path.join(ROOT, "tools", "welcome")
+
+
 def context_files(m):
-    """Everything in the image directory except the release settings and the smoke script."""
-    return sorted(f for f in os.listdir(m["dir"]) if f not in ("image.yaml", "smoke.sh")
-                  and os.path.isfile(os.path.join(m["dir"], f)))
+    """Everything in the image directory except the release settings and the smoke script, plus the shared
+    first-shell tips (tools/welcome/) as rc-welcome/<file>. Returns sorted (name in the context, local path)."""
+    own = [(f, os.path.join(m["dir"], f)) for f in os.listdir(m["dir"])
+           if f not in ("image.yaml", "smoke.sh") and os.path.isfile(os.path.join(m["dir"], f))]
+    shared = [(f"rc-welcome/{f}", os.path.join(WELCOME_DIR, f)) for f in os.listdir(WELCOME_DIR)
+              if os.path.isfile(os.path.join(WELCOME_DIR, f))] if os.path.isdir(WELCOME_DIR) else []
+    return sorted(own + shared)
 
 
 def context_tag(m):
     h = hashlib.sha256()
-    for f in context_files(m):
+    for f, path in context_files(m):
         if f == "Dockerfile":   # what is built: FROM rewritten to Harbor; comments and blank lines do not matter
             data = "\n".join(l for l in m["build_dockerfile"].splitlines()
                              if l.strip() and not l.lstrip().startswith("#")).encode()
         else:
-            data = open(os.path.join(m["dir"], f), "rb").read()
+            data = open(path, "rb").read()
         h.update(f.encode() + b"\0" + data + b"\0")
     return "ctx-" + h.hexdigest()[:20]
 
@@ -102,13 +109,13 @@ def build(m):
     name = f"rcimg-build-{m['name']}-{int(time.time())}"[:62]
     buf = io.BytesIO()
     with tarfile.open(fileobj=buf, mode="w:gz") as t:
-        for f in context_files(m):
+        for f, path in context_files(m):
             if f == "Dockerfile":
                 data = m["build_dockerfile"].encode()
                 ti = tarfile.TarInfo("Dockerfile"); ti.size = len(data); ti.mode = 0o644
                 t.addfile(ti, io.BytesIO(data))
             else:
-                t.add(os.path.join(m["dir"], f), arcname=f)
+                t.add(path, arcname=f)
     tmp = tempfile.mkdtemp(prefix="ctx-")
     with open(os.path.join(tmp, "context.tar.gz"), "wb") as f:
         f.write(buf.getvalue())
@@ -250,7 +257,7 @@ def main():
     print(json.dumps({k: v for k, v in m.items() if k != "dir"}, ensure_ascii=False))
     if a.dry_run:
         if m["build"]:
-            print(f"build context {context_tag(m)}: {', '.join(context_files(m))}")
+            print(f"build context {context_tag(m)}: {', '.join(f for f, _ in context_files(m))}")
         return
     ensure_mirror(m)   # the upstream image, or the base image of a build
     src_repo, digest = build(m) if m["build"] else (m["mirror_repo"], m["digest"])

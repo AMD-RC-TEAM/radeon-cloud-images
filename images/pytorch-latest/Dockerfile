@@ -8,3 +8,8 @@ ARG PIP_INDEX_URL
 # Bake it in, pinned, without changing anything already installed (add_jupyterlab.sh; the smoke verifies both).
 COPY add_jupyterlab.sh /tmp/add_jupyterlab.sh
 RUN sh /tmp/add_jupyterlab.sh && rm -f /tmp/add_jupyterlab.sh
+
+# First-terminal tips (tools/welcome/, put into every build context as rc-welcome/): what this image is and how
+# to expose a web app with rc-tunnel. Printed once per home directory; `bash -c` and scripts stay silent.
+COPY rc-welcome/ /tmp/rc-welcome/
+RUN sh /tmp/rc-welcome/add_welcome.sh "Official ROCm PyTorch image, newest release channel" && rm -rf /tmp/rc-welcome

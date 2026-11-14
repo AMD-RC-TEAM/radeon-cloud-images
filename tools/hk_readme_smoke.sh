@@ -27,6 +27,15 @@ echo "== pip install $pkg"
 pip install "$pkg" || { echo "FAIL: pip install $pkg"; exit 1; }
 python3 -c "import hk; print('hk-dsl', hk.__version__)" || { echo "FAIL: import hk"; exit 1; }
 
+# Fetch the model first, with retries: a slow mirror read (httpx ReadTimeout, 11-13) must not fail the smoke.
+# The serve below then loads it from the cache, exactly as the README's command would after a download.
+echo "== download $MODEL via ${HF_ENDPOINT:-huggingface.co}"
+for attempt in 1 2 3; do
+    HF_HUB_DOWNLOAD_TIMEOUT=60 python3 -c 'import sys; from huggingface_hub import snapshot_download as s; s(sys.argv[1])' "$MODEL" \
+        > /dev/null 2>&1 && break
+    echo "download attempt $attempt failed; retrying"; sleep 10
+done
+
 echo "== vllm serve $MODEL (log: $LOG)"
 vllm serve "$MODEL" --port "$PORT" > "$LOG" 2>&1 &
 pid=$!
