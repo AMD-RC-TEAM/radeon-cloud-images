@@ -106,5 +106,22 @@ rc_tunnel_shim() {
   local h out; h=$(mktemp -d)
   if out=$(HOME=$h rc-tunnel version 2>&1); then echo "FAIL: shim succeeded without a secret bundle"; return 1; fi
   printf '%s' "$out" | grep -q 'not available here' || { echo "FAIL: unexpected shim message: $out"; return 1; }
-  echo "rc-tunnel shim: on PATH; explains itself outside an instance"
+  # With an installer: the first call installs, shows nothing of the installer on stdout, and passes the arguments on;
+  # a failing installer's output reaches the user.
+  local fake; fake=$(mktemp -d)
+  cat > "$fake/ok" <<'SH'
+#!/bin/sh
+mkdir -p "$HOME/.local/bin"
+printf '#!/bin/sh\necho "real rc-tunnel: $*"\n' > "$HOME/.local/bin/rc-tunnel"; chmod 755 "$HOME/.local/bin/rc-tunnel"
+echo "installer chatter"
+SH
+  printf '#!/bin/sh\necho "broker unreachable" >&2; exit 7\n' > "$fake/bad"
+  h=$(mktemp -d)
+  out=$(HOME=$h RC_TUNNEL_INSTALLER=$fake/ok rc-tunnel expose --port 8888 2>/dev/null) || { echo "FAIL: shim did not run the installed binary"; return 1; }
+  [ "$out" = "real rc-tunnel: expose --port 8888" ] || { echo "FAIL: shim output: $out"; return 1; }
+  out=$(HOME=$h RC_TUNNEL_INSTALLER=$fake/bad rc-tunnel status 2>/dev/null) || { echo "FAIL: shim reinstalled over an installed binary"; return 1; }
+  h=$(mktemp -d)
+  if out=$(HOME=$h RC_TUNNEL_INSTALLER=$fake/bad rc-tunnel status 2>&1); then echo "FAIL: shim ignored a failing installer"; return 1; fi
+  printf '%s' "$out" | grep -q 'broker unreachable' || { echo "FAIL: installer error hidden: $out"; return 1; }
+  echo "rc-tunnel shim: on PATH; explains itself outside an instance; installs once, passes arguments, shows installer errors"
 }

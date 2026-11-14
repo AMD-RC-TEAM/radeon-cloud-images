@@ -1,15 +1,31 @@
 #!/bin/sh
-# rc-tunnel first-run shim (/usr/local/bin/rc-tunnel). The real rc-tunnel ships in each instance's own secret bundle,
-# not in the image: on first use this installs it into ~/.local/bin (once per home), then runs it with the same
-# arguments. After that the installed one is used directly (it is earlier on PATH once ~/.profile is re-read).
-real="$HOME/.local/bin/rc-tunnel"
-inst=/var/run/secrets/frp-self-service/install
+# rc-tunnel first-run shim (/usr/local/bin/rc-tunnel). The real rc-tunnel comes from each instance's own secret
+# bundle, not from the image: on first use this runs the bundle's installer (once per home, into ~/.local/bin),
+# then runs the installed binary with the same arguments. Later shells find ~/.local/bin/rc-tunnel first on PATH.
+# RC_TUNNEL_INSTALLER overrides the installer path (smoke tests only).
+inst=${RC_TUNNEL_INSTALLER:-/var/run/secrets/frp-self-service/install}
+if [ -z "${HOME:-}" ]; then
+  echo "rc-tunnel: HOME is not set; open a Notebook terminal and try again." >&2
+  exit 1
+fi
+real=$HOME/.local/bin/rc-tunnel
 if [ ! -x "$real" ]; then
   if [ ! -r "$inst" ]; then
     echo "rc-tunnel: not available here (no $inst). Use a Notebook terminal in a Radeon Cloud instance." >&2
     exit 1
   fi
-  sh "$inst" >/dev/null 2>&1 || { echo "rc-tunnel: install failed; run it by hand: sh $inst" >&2; exit 1; }
-  [ -x "$real" ] || { echo "rc-tunnel: install did not create $real" >&2; exit 1; }
+  echo "rc-tunnel: first use, installing it into ~/.local/bin ..." >&2
+  log=$(mktemp "${TMPDIR:-/tmp}/rc-tunnel-install.XXXXXX") || exit 1
+  if ! sh "$inst" >"$log" 2>&1; then
+    echo "rc-tunnel: install failed:" >&2
+    sed 's/^/  /' "$log" >&2
+    rm -f "$log"
+    echo "rc-tunnel: to retry by hand: sh $inst" >&2
+    exit 1
+  fi
+  rm -f "$log"
+  [ -x "$real" ] || { echo "rc-tunnel: the installer did not create $real" >&2; exit 1; }
 fi
+# Never loop back into this shim.
+[ "$real" -ef "$0" ] && { echo "rc-tunnel: $real points back to the shim; remove it and retry" >&2; exit 1; }
 exec "$real" "$@"
