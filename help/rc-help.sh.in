@@ -26,7 +26,7 @@ if [ -z "${RC_WELCOME_FORCE:-}" ]; then
 fi
 
 __rch() {
-  local B='' D='' R='' fam='' name vers='' n=0 id gpu port=7860 hfslow r d x py line
+  local B='' D='' R='' fam='' vers='' n=0 id gpu port=7860 hfslow r d x py line
   if { [ -t 1 ] || [ -n "${RC_WELCOME_COLOR:-}" ]; } && [ -z "${NO_COLOR:-}" ] && [ "${TERM:-dumb}" != dumb ]; then
     B=$'\e[1m'; D=$'\e[2m'; R=$'\e[0m'
   fi
@@ -46,6 +46,13 @@ out = []
 for pkg, label in (("torch", "PyTorch"), ("vllm", "vLLM"), ("sglang", "SGLang")):
     try: out.append(f"{label} {m.version(pkg).split('+')[0]}")
     except Exception: pass
+if fam == "comfyui":
+    try:
+        import re
+        t = open("/opt/ComfyUI/comfyui_version.py").read()
+        out.append("ComfyUI " + re.search(r"[\"']([0-9][^\"']*)[\"']", t).group(1))
+    except Exception:
+        out.append("ComfyUI")
 print(fam + "|" + "".join(" · " + s for s in out))
 PY
 )
@@ -56,7 +63,6 @@ PY
   if [ -z "$x" ]; then for r in /opt/rocm-[0-9]*; do [ -d "$r" ] && x=${r#/opt/rocm-}; done; fi
   [ -n "$x" ] && vers="ROCm $x$vers"
   vers=${vers# · }
-  case "$fam" in sglang) name=SGLang;; vllm) name=vLLM;; comfyui) name=ComfyUI;; pytorch) name=PyTorch;; *) name='Radeon Cloud instance';; esac
   for r in /dev/dri/renderD*; do
     [ -e "$r" ] || continue; d=/sys/class/drm/${r##*/}/device
     [ -r "$d/vendor" ] && [ "$(cat "$d/vendor")" = 0x1002 ] || continue
@@ -65,8 +71,8 @@ PY
   case "$id" in 0x744b) gpu='Radeon PRO W7900D (48 GB)';; 0x7448) gpu='Radeon PRO W7900 (48 GB)';; 0x7551) gpu='Radeon AI PRO R9700 (32 GB)';; *) gpu='AMD Radeon GPU';; esac
   x=$(__rch_text "$fam" | sed -n 's/^# port=\([0-9]*\).*/\1/p' | head -1); [ -n "$x" ] && port=$x
   x=$(__rch_text "$fam" | sed -n 's/^# hfslow=//p' | head -1); [ -n "$x" ] && hfslow=$x
-  printf '%s%s%s\n' "$B" "$name" "$R"
-  [ -n "$vers" ] && printf '%s\n' "$vers"
+  # The header shows what is installed, not an image name (the script cannot know which catalog row this is).
+  printf '%s%s%s\n' "$B" "${vers:-Radeon Cloud instance}" "$R"
   [ "$n" -gt 0 ] && printf '%s GPU%s: %s\n' "$n" "$([ "$n" -gt 1 ] && echo s)" "$gpu"
   echo
   { __rch_text "$fam"; [ -n "$(__rch_text "$fam")" ] && echo; __rch_text common; } | while IFS= read -r line || [ -n "$line" ]; do
