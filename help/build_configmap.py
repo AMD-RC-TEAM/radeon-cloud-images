@@ -2,7 +2,8 @@
 """Build the amd-oneclick-shell-help ConfigMap (D-20261114-06) from help/rc-help.sh.in + help/text/*.txt.
 
     python3 help/build_configmap.py --namespace <runtime-namespace> > shell-help.yaml
-    kubectl apply -f shell-help.yaml          # new instances pick it up; running ones keep theirs
+    kubectl delete cm amd-oneclick-shell-help -n <ns> --ignore-not-found && kubectl create -f shell-help.yaml
+    # immutable (runtime namespaces require it); new instances pick it up, running ones keep theirs
 
 Editing the help = editing help/text/*.txt (common.txt for every image; <family>.txt for quick start), then
 rebuild and apply. Families are detected inside the instance (sglang, vllm, comfyui, pytorch); anything else gets
@@ -43,6 +44,8 @@ def main():
     cm = {"apiVersion": "v1", "kind": "ConfigMap",
           "metadata": {"name": "amd-oneclick-shell-help", "namespace": a.namespace,
                        "labels": {"app.kubernetes.io/part-of": "radeon-cloud", "radeon-cloud/decision": "D-20261114-06"}},
+          # Runtime namespaces only admit immutable ConfigMaps: to change the help, delete and re-create it.
+          "immutable": True,
           "data": {"rc-help.sh": script}}
     json.dump(cm, sys.stdout, indent=2, ensure_ascii=False); sys.stdout.write("\n")
 

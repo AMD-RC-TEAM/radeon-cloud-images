@@ -85,7 +85,8 @@ the image family itself (SGLang, vLLM, ComfyUI, PyTorch; anything else gets the 
 To change the text, edit `help/text/common.txt` (all images) or `help/text/<family>.txt` (quick start), then:
 
     python3 help/build_configmap.py --namespace <runtime-namespace> > shell-help.json
-    kubectl apply -f shell-help.json
+    kubectl -n <runtime-namespace> delete cm amd-oneclick-shell-help --ignore-not-found
+    kubectl create -f shell-help.json        # runtime namespaces only admit immutable ConfigMaps
 
 New instances pick it up; running ones keep the version they started with. No image rebuild.
 
