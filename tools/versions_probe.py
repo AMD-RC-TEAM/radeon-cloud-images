@@ -11,12 +11,23 @@ from importlib import metadata
 ORDER = ["ROCm", "Python", "PyTorch", "vLLM", "SGLang", "ComfyUI", "llama.cpp", "Unsloth"]
 
 
+# Tools installed outside the default interpreter (uv tool install unsloth, a venv under /opt).
+OTHER_SITES = ["/root/.unsloth/studio/*/lib/python3*/site-packages", "/root/.local/share/uv/tools/*/lib/python3*/site-packages", "/home/*/.local/share/uv/tools/*/lib/python3*/site-packages",
+               "/opt/*/lib/python3*/site-packages"]
+
+
 def pkg(*names):
     for n in names:
         try:
             return metadata.version(n).split("+")[0]
         except Exception:
             pass
+    for n in names:
+        for site in OTHER_SITES:
+            for d in sorted(glob.glob(os.path.join(site, n.replace("-", "_") + "-*.dist-info"))):
+                m = re.search(r"-([0-9][^-]*)\.dist-info$", d)
+                if m:
+                    return m.group(1).split("+")[0]
     return None
 
 
