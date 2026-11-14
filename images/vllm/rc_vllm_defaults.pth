@@ -1,0 +1,1 @@
+import rc_vllm_defaults; rc_vllm_defaults.install()
