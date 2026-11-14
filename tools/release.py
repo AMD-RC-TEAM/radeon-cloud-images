@@ -201,13 +201,14 @@ def _smoke_in(ns, m, candidate):
     name = f"rcimg-smoke-{m['name']}-{int(time.time())}"[:62]
     cm = sh("kubectl", "-n", ns, "create", "configmap", name, f"--from-file=smoke.sh={m['dir']}/smoke.sh",
             f"--from-file=smoke_lib.sh={ROOT}/tools/smoke_lib.sh",
-            f"--from-file=hk_readme_smoke.sh={ROOT}/tools/hk_readme_smoke.sh", "-o", "name")
+            f"--from-file=hk_readme_smoke.sh={ROOT}/tools/hk_readme_smoke.sh",
+            f"--from-file=versions_probe.py={ROOT}/tools/versions_probe.py", "-o", "name")
     job = {"apiVersion": "batch/v1", "kind": "Job",
            "metadata": {"name": name, "namespace": ns, "labels": {"app.kubernetes.io/part-of": "radeon-cloud-images"}},
            "spec": {"backoffLimit": 0, "activeDeadlineSeconds": 3600, "ttlSecondsAfterFinished": 3600, "template": {"spec": {
                "restartPolicy": "Never",
                "nodeSelector": {"amd-oneclick.io/workload-ci": "enabled"},
-               "containers": [{"name": "smoke", "image": candidate, "command": ["/bin/bash", "/smoke/smoke.sh"],
+               "containers": [{"name": "smoke", "image": candidate, "command": ["/bin/bash", "-c", VERSIONS_AFTER_SMOKE],
                                "env": [{"name": "SMOKE_MODEL_DIR", "value": "/models/Qwen2.5-0.5B-Instruct"},
                                        {"name": "HF_ENDPOINT", "value": HF_ENDPOINT},
                                        # Persistent HF cache on the CI node (seeded with Qwen3-8B and the SD1.5 fp16
@@ -228,6 +229,8 @@ def _smoke_in(ns, m, candidate):
         logs = sh("kubectl", "-n", ns, "logs", f"job/{name}", "--tail=200", check=False)
         print(logs)
         ok = r.returncode == 0 and "SMOKE PASS" in logs
+        if ok:
+            report_versions(m["name"], candidate, logs)
         if not ok:
             # The slot namespaces keep no events, so say why before the Job is deleted (11-12: a smoke sat 30 min with no output).
             print("smoke did not pass; pod state:")
@@ -244,6 +247,61 @@ def _smoke_in(ns, m, candidate):
         raise SystemExit(f"smoke failed for {candidate}")
 
 
+# The smoke ends with the versions probe; its RC-VERSIONS line is the source of the picker description (D-20261114-08).
+VERSIONS_AFTER_SMOKE = "/bin/bash /smoke/smoke.sh && { python3 /smoke/versions_probe.py || echo 'RC-VERSIONS {}'; }"
+VERSIONS_RE = re.compile(r"^RC-VERSIONS (\{.*\})\s*$", re.M)
+
+
+def report_versions(name, ref, logs):
+    """Print one 'RC-VERSIONS-OF <digest> <json>' line (catalog_sync reads it from this run's log) and keep a copy."""
+    found = VERSIONS_RE.findall(logs)
+    if not found:
+        print(f"versions: no RC-VERSIONS line for {name}")
+        return None
+    v = json.loads(found[-1])
+    digest = ref.rsplit("@", 1)[-1]
+    print(f"RC-VERSIONS-OF {digest} " + json.dumps({"image": name, "versions": v}, separators=(",", ":")))
+    out = os.environ.get("RC_VERSIONS_DIR")
+    if out:
+        os.makedirs(out, exist_ok=True)
+        with open(os.path.join(out, f"versions-{name}-{digest[7:19]}.json"), "w") as f:
+            json.dump({"image": name, "ref": ref, "digest": digest, "versions": v}, f, indent=1)
+    return v
+
+
+def probe(ref, name="probe"):
+    """Run only the versions probe in an existing image (no GPU, no slot): for backfilling rows released earlier."""
+    if "@sha256:" not in ref:
+        raise SystemExit("probe needs an image reference pinned by digest")
+    job_name = f"rcimg-versions-{name}-{int(time.time())}"[:62]
+    labels = {"app.kubernetes.io/part-of": "radeon-cloud-images"}
+    cm = sh("kubectl", "-n", BUILD_NS, "create", "configmap", job_name,
+            f"--from-file=versions_probe.py={ROOT}/tools/versions_probe.py", "-o", "name").strip()
+    job = {"apiVersion": "batch/v1", "kind": "Job", "metadata": {"name": job_name, "namespace": BUILD_NS, "labels": labels},
+           "spec": {"backoffLimit": 0, "activeDeadlineSeconds": 2400, "ttlSecondsAfterFinished": 3600, "template": {
+               "metadata": {"labels": labels},
+               "spec": {"restartPolicy": "Never",
+                        # The CI node already holds the released images, so most probes start without a pull.
+                        "nodeSelector": {"amd-oneclick.io/workload-ci": "enabled"},
+                        "containers": [{"name": "probe", "image": ref,
+                                        "command": ["/bin/sh", "-c", "python3 /probe/versions_probe.py || python /probe/versions_probe.py"],
+                                        "resources": {"requests": {"cpu": "100m", "memory": "256Mi"},
+                                                      "limits": {"cpu": "1", "memory": "2Gi"}},
+                                        "volumeMounts": [{"name": "probe", "mountPath": "/probe"}]}],
+                        "volumes": [{"name": "probe", "configMap": {"name": job_name}}]}}}}
+    subprocess.run(["kubectl", "apply", "-f", "-"], input=json.dumps(job), text=True, check=True, capture_output=True)
+    try:
+        r = subprocess.run(["kubectl", "-n", BUILD_NS, "wait", f"job/{job_name}", "--for=condition=complete",
+                            "--timeout=2300s"], text=True, capture_output=True)
+        logs = sh("kubectl", "-n", BUILD_NS, "logs", f"job/{job_name}", "--tail=20", check=False)
+        print(logs)
+    finally:
+        sh("kubectl", "-n", BUILD_NS, "delete", "job", job_name, "--wait=true", "--timeout=180s", check=False)
+        sh("kubectl", "-n", BUILD_NS, "delete", cm, check=False)
+    if r.returncode or not report_versions(name, ref, logs):
+        raise SystemExit(f"versions probe failed for {ref}")
+
+
 def promote(m, src_repo, digest):
     rc = m["rc_repo"]
     harbor.copy(rc, src_repo, digest)
@@ -256,11 +314,17 @@ def promote(m, src_repo, digest):
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("image")
+    ap.add_argument("image", help="image dir under images/, or with --probe a <name>=<ref@sha256:...> pair")
     ap.add_argument("--skip-smoke", action="store_true", help="only for rollback to an already-smoked digest")
     ap.add_argument("--dry-run", action="store_true")
     ap.add_argument("--smoke-only", action="store_true", help="PR check: mirror + smoke, no rc-current move, no catalog")
+    ap.add_argument("--probe", action="store_true", help="only print the versions of an existing digest (no GPU)")
     a = ap.parse_args()
+    if a.probe:
+        for item in a.image.split():
+            name, _, ref = item.partition("=")
+            probe(ref, name)
+        return
     m = parse(a.image)
     print(json.dumps({k: v for k, v in m.items() if k != "dir"}, ensure_ascii=False))
     if a.dry_run:
