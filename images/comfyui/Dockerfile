@@ -19,3 +19,6 @@ RUN python3 /tmp/rc/fetch_src.py tar comfyanonymous/ComfyUI ${COMFYUI_COMMIT} /o
 # Bake it in, pinned, without changing anything already installed (add_jupyterlab.sh; the smoke verifies both).
 COPY add_jupyterlab.sh /tmp/add_jupyterlab.sh
 RUN sh /tmp/add_jupyterlab.sh && rm -f /tmp/add_jupyterlab.sh
+
+# JupyterLab terminals start "$SHELL -l" and fall back to sh when SHELL is unset (no history, no tab completion).
+ENV SHELL=/bin/bash
