@@ -1,0 +1,5 @@
+# port=30000
+# hfslow=export SGLANG_USE_MODELSCOPE=true
+{B}Quick start{R}
+  python -m sglang.launch_server --model-path Qwen/Qwen3-0.6B --port 30000
+  {D}Faster kernels: pip install -U hk-dsl, then start the server as usual.{R}

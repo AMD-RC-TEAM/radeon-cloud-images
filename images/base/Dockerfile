@@ -6,7 +6,7 @@ FROM crpi-xhg6joi134vrkpzq.cn-shanghai.personal.cr.aliyuncs.com/vivienfanghua/am
 # First-terminal tips (tools/welcome/, put into every build context as rc-welcome/): what this image is and how
 # to expose a web app with rc-tunnel. Printed once per home directory; `bash -c` and scripts stay silent.
 COPY rc-welcome/ /tmp/rc-welcome/
-RUN sh /tmp/rc-welcome/add_welcome.sh "AMD OneClick base image: ROCm, Python, JupyterLab and OpenCode" && rm -rf /tmp/rc-welcome
+RUN sh /tmp/rc-welcome/add_welcome.sh base "Base" && rm -rf /tmp/rc-welcome
 
 # JupyterLab terminals start "$SHELL -l" and fall back to sh when SHELL is unset (no history, no tab completion).
 ENV SHELL=/bin/bash

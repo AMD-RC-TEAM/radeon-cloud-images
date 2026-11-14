@@ -1,0 +1,4 @@
+# port=7860
+{B}Quick start{R}
+  rocm-smi                      {D}# GPU status{R}
+  opencode                      {D}# AI coding assistant{R}

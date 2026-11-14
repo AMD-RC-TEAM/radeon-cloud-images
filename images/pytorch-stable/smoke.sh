@@ -7,6 +7,7 @@ set -euo pipefail
 jupyterlab_fast_path
 welcome_once
 welcome_jupyter_terminal
+rc_tunnel_shim
 echo "== rocminfo"; grep -m1 -E 'gfx1100' <<<"$(rocminfo)"
 echo "== torch"
 python3 - <<'PY'

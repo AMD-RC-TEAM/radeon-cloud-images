@@ -21,15 +21,18 @@ PY
   fi
 }
 
-# welcome_once: the first-shell tips print once in an interactive shell, never in `bash -c`, and not again.
-# Only our block (from "Radeon Cloud:" to "Hide this message") is checked; the image's own bashrc may print other lines.
-welcome_block() { sed -n '/^Radeon Cloud:/,/^Hide this message/p'; }
+# welcome_once: the first-shell help prints once in an interactive shell, never in `bash -c`, and not again.
+# The block ends with the "Hide this message" line; the image's own bashrc may print other lines before it.
+WELCOME_END='Hide this message: touch ~/.rc-welcome-hidden'
+welcome_block() { sed 's/\x1b\[[0-9;]*m//g' | grep -F -B200 "$WELCOME_END" || true; }
 welcome_once() {
   local h first; h=$(mktemp -d)
   [ -z "$(HOME=$h bash -c 'true' 2>&1 | welcome_block)" ] || { echo "FAIL: welcome printed in a non-interactive shell"; return 1; }
   first=$(HOME=$h bash -i -c 'true' 2>/dev/null | welcome_block)
   [ -n "$first" ] || { echo "FAIL: no welcome in the first interactive shell"; return 1; }
-  [ "$(printf '%s\n' "$first" | wc -l)" -le 8 ] || { echo "FAIL: welcome is longer than 8 lines"; return 1; }
+  printf '%s\n' "$first" | grep -q 'rc-tunnel expose --port' || { echo "FAIL: no tunnel line in the help"; return 1; }
+  printf '%s\n' "$first" | grep -q '^  No GitHub?' || { echo "FAIL: no Downloads block in the help"; return 1; }
+  [ "$(printf '%s\n' "$first" | awk 'length > 80' | wc -l)" -eq 0 ] || { echo "FAIL: help line wider than 80 columns"; return 1; }
   [ -z "$(HOME=$h bash -i -c 'true' 2>/dev/null | welcome_block)" ] || { echo "FAIL: welcome printed twice"; return 1; }
   echo "welcome: once in an interactive shell, silent otherwise"; printf '%s\n' "$first" | sed 's/^/  | /'
 }
@@ -84,15 +87,24 @@ try:
     # The marker is assembled by the shell, so the echoed command line itself never contains "RC-SHELL=".
     probe = 'echo "RC-$(echo SHELL)=$(basename "$(readlink -f /proc/$$/exe)")"\r'
     out = asyncio.run(read(name, "RC-SHELL=", send=probe, wait=15))
-    assert "Radeon Cloud:" in out and "rc-tunnel expose" in out, f"no tips in a JupyterLab terminal; got: {out[-300:]!r}"
+    assert "Hide this message" in out and "rc-tunnel expose" in out, f"no help in a JupyterLab terminal; got: {out[-300:]!r}"
     assert "RC-SHELL=bash" in out, f"JupyterLab terminal is not bash; got: {out[-200:]!r}"
     print("welcome: shown in a JupyterLab terminal; the terminal shell is bash")
     # A second terminal in the same home does not repeat them.
     out2 = asyncio.run(read(new_terminal(), "RC-SHELL=", send=probe, wait=15))
     assert "RC-SHELL=" in out2, f"second JupyterLab terminal did not answer; got: {out2[-200:]!r}"
-    assert "Radeon Cloud:" not in out2, "welcome printed again in a second JupyterLab terminal"
+    assert "Hide this message" not in out2, "welcome printed again in a second JupyterLab terminal"
     print("welcome: not repeated in a second JupyterLab terminal")
 finally:
     p.terminate()
 PY
+}
+
+# rc_tunnel_shim: rc-tunnel is on PATH from the first shell; outside an instance (no secret bundle) it says so and exits 1.
+rc_tunnel_shim() {
+  [ "$(command -v rc-tunnel)" = /usr/local/bin/rc-tunnel ] || { echo "FAIL: rc-tunnel shim not on PATH"; return 1; }
+  local h out; h=$(mktemp -d)
+  if out=$(HOME=$h rc-tunnel version 2>&1); then echo "FAIL: shim succeeded without a secret bundle"; return 1; fi
+  printf '%s' "$out" | grep -q 'not available here' || { echo "FAIL: unexpected shim message: $out"; return 1; }
+  echo "rc-tunnel shim: on PATH; explains itself outside an instance"
 }

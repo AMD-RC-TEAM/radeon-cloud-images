@@ -6,6 +6,9 @@
 set -euo pipefail
 . "$(dirname "$0")/smoke_lib.sh"
 jupyterlab_fast_path
+welcome_once
+welcome_jupyter_terminal
+rc_tunnel_shim
 grep -m1 -E 'gfx11[0-9]{2}' <<<"$(rocminfo)"
 python3 -c 'import torch; print("torch", torch.__version__); assert torch.cuda.is_available()'
 python3 -c 'import sys; sys.path.insert(0, "/opt/ComfyUI"); import comfyui_version as v; print("ComfyUI", v.__version__)'

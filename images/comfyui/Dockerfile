@@ -20,5 +20,9 @@ RUN python3 /tmp/rc/fetch_src.py tar comfyanonymous/ComfyUI ${COMFYUI_COMMIT} /o
 COPY add_jupyterlab.sh /tmp/add_jupyterlab.sh
 RUN sh /tmp/add_jupyterlab.sh && rm -f /tmp/add_jupyterlab.sh
 
+# First-terminal help (tools/welcome/, put into every build context as rc-welcome/).
+COPY rc-welcome/ /tmp/rc-welcome/
+RUN sh /tmp/rc-welcome/add_welcome.sh comfyui "ComfyUI" "/opt/comfyui/README.md" && rm -rf /tmp/rc-welcome
+
 # JupyterLab terminals start "$SHELL -l" and fall back to sh when SHELL is unset (no history, no tab completion).
 ENV SHELL=/bin/bash

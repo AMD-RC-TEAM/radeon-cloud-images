@@ -1,0 +1,15 @@
+#!/bin/sh
+# rc-tunnel first-run shim (/usr/local/bin/rc-tunnel). The real rc-tunnel ships in each instance's own secret bundle,
+# not in the image: on first use this installs it into ~/.local/bin (once per home), then runs it with the same
+# arguments. After that the installed one is used directly (it is earlier on PATH once ~/.profile is re-read).
+real="$HOME/.local/bin/rc-tunnel"
+inst=/var/run/secrets/frp-self-service/install
+if [ ! -x "$real" ]; then
+  if [ ! -r "$inst" ]; then
+    echo "rc-tunnel: not available here (no $inst). Use a Notebook terminal in a Radeon Cloud instance." >&2
+    exit 1
+  fi
+  sh "$inst" >/dev/null 2>&1 || { echo "rc-tunnel: install failed; run it by hand: sh $inst" >&2; exit 1; }
+  [ -x "$real" ] || { echo "rc-tunnel: install did not create $real" >&2; exit 1; }
+fi
+exec "$real" "$@"
