@@ -57,10 +57,17 @@ try:
                                  headers={"Content-Type": "application/json"})
     name = json.load(urllib.request.urlopen(req, timeout=10))["name"]
 
-    async def read():
+    def new_terminal():
+        req = urllib.request.Request(f"{base}/api/terminals?token={tok}", data=b"{}", method="POST",
+                                     headers={"Content-Type": "application/json"})
+        return json.load(urllib.request.urlopen(req, timeout=10))["name"]
+
+    async def read(name, until, send=None, wait=10):
         ws = await websocket_connect(f"ws://127.0.0.1:{port}/terminals/websocket/{name}?token={tok}")
-        out, t0 = "", time.time()
-        while time.time() - t0 < 10 and "Hide this message" not in out:
+        out, t0, sent = "", time.time(), False
+        while time.time() - t0 < wait and until not in out:
+            if send and not sent and time.time() - t0 > 3:
+                await ws.write_message(json.dumps(["stdin", send])); sent = True
             try:
                 m = await asyncio.wait_for(ws.read_message(), timeout=2)
             except asyncio.TimeoutError:
@@ -73,9 +80,18 @@ try:
         ws.close()
         return out
 
-    out = asyncio.run(read())
+    # The first terminal shows the tips, and its shell is bash (the image sets SHELL=/bin/bash; unset, it is sh).
+    # The marker is assembled by the shell, so the echoed command line itself never contains "RC-SHELL=".
+    probe = 'echo "RC-$(echo SHELL)=$(basename "$(readlink -f /proc/$$/exe)")"\r'
+    out = asyncio.run(read(name, "RC-SHELL=", send=probe, wait=15))
     assert "Radeon Cloud:" in out and "rc-tunnel expose" in out, f"no tips in a JupyterLab terminal; got: {out[-300:]!r}"
-    print("welcome: shown in a JupyterLab terminal")
+    assert "RC-SHELL=bash" in out, f"JupyterLab terminal is not bash; got: {out[-200:]!r}"
+    print("welcome: shown in a JupyterLab terminal; the terminal shell is bash")
+    # A second terminal in the same home does not repeat them.
+    out2 = asyncio.run(read(new_terminal(), "RC-SHELL=", send=probe, wait=15))
+    assert "RC-SHELL=" in out2, f"second JupyterLab terminal did not answer; got: {out2[-200:]!r}"
+    assert "Radeon Cloud:" not in out2, "welcome printed again in a second JupyterLab terminal"
+    print("welcome: not repeated in a second JupyterLab terminal")
 finally:
     p.terminate()
 PY
