@@ -75,6 +75,20 @@ every template that points at a stable row so its owner can move it to a fixed-v
 Actions -> rollback -> image: `rc-current` goes back to `rc-prev`; the catalog job then adopts it on every site.
 The digest that was rolled back stays tagged `rc-rolled-back`.
 
+## First-shell help (no action needed in images)
+
+Every Radeon Cloud instance shows a short help the first time a user opens a terminal (quick start, downloads, files,
+`rc-tunnel`). **Image authors don't need to do anything**: the platform mounts it into every instance at
+`/etc/profile.d/00-rc-help.sh` from the ConfigMap `amd-oneclick-shell-help` (D-20261114-06), and the script detects
+the image family itself (SGLang, vLLM, ComfyUI, PyTorch; anything else gets the common part).
+
+To change the text, edit `help/text/common.txt` (all images) or `help/text/<family>.txt` (quick start), then:
+
+    python3 help/build_configmap.py --namespace <runtime-namespace> > shell-help.json
+    kubectl apply -f shell-help.json
+
+New instances pick it up; running ones keep the version they started with. No image rebuild.
+
 ## Adding or upgrading an image
 - **Upgrade:** change the `FROM` line's tag@digest (the daily bot prepares this branch for you), read the upstream
   release notes, merge. See CONTRIBUTING.md.

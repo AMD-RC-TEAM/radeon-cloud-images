@@ -1,0 +1,5 @@
+# port=8000
+# hfslow=pip install modelscope && export VLLM_USE_MODELSCOPE=True
+{B}Quick start{R}
+  vllm serve Qwen/Qwen3-0.6B --port 8000
+  {D}Faster kernels: pip install -U hk-dsl, then start the server as usual.{R}

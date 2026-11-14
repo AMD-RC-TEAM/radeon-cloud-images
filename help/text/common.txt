@@ -1,0 +1,15 @@
+{B}Downloads{R}
+  No GitHub?  git clone https://gh-proxy.org/https://github.com/<owner>/<repo>
+  HF slow?    {HFSLOW}
+
+{B}Your files{R}
+  Keep your work in /workspace; everything else is lost when the instance is
+  deleted. Choose "Persistent /workspace" at launch to keep /workspace too.
+
+{B}Open a web service in your browser{R}
+  rc-tunnel expose --port {PORT}      {D}# prints an https:// address{R}
+  rc-tunnel status / rc-tunnel stop
+
+{B}More{R}
+  Docs: https://amd-aim.github.io/radeon-cloud-docs/{README}
+  {D}Hide this message: touch ~/.rc-welcome-hidden{R}

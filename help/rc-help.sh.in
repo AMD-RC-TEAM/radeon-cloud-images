@@ -1,0 +1,88 @@
+# Radeon Cloud first-shell help (D-20261114-06). Mounted by the platform at /etc/profile.d/00-rc-help.sh in every
+# instance, from the ConfigMap amd-oneclick-shell-help (built by help/build_configmap.py; do not edit the ConfigMap
+# by hand). Printed once per home directory in the first interactive bash; silent in sh, `bash -c`, scripts, when
+# ~/.rc-welcome-shown or ~/.rc-welcome-hidden exists, or with RC_WELCOME=0. Any error -> no output.
+[ -n "${BASH_VERSION:-}" ] || return 0 2>/dev/null || exit 0
+case $- in *i*) ;; *) return 0 2>/dev/null || exit 0 ;; esac
+
+# rc-tunnel on first use: the real tool ships in the instance's secret bundle and installs into ~/.local/bin.
+if ! command -v rc-tunnel >/dev/null 2>&1 && [ -r /var/run/secrets/frp-self-service/install ]; then
+  rc-tunnel() {
+    if [ ! -x "$HOME/.local/bin/rc-tunnel" ]; then
+      sh /var/run/secrets/frp-self-service/install >/dev/null 2>&1 \
+        || { echo "rc-tunnel: install failed; run: sh /var/run/secrets/frp-self-service/install" >&2; return 1; }
+    fi
+    "$HOME/.local/bin/rc-tunnel" "$@"
+  }
+fi
+
+[ -n "${RC_WELCOME_DONE:-}" ] && return 0
+RC_WELCOME_DONE=1   # also keeps the older in-image /etc/profile.d/rc-welcome.sh quiet
+[ "${RC_WELCOME:-1}" = 0 ] && return 0
+if [ -z "${RC_WELCOME_FORCE:-}" ]; then
+  [ -n "${HOME:-}" ] && [ -w "$HOME" ] || return 0
+  { [ -e "$HOME/.rc-welcome-shown" ] || [ -e "$HOME/.rc-welcome-hidden" ]; } && return 0
+  : > "$HOME/.rc-welcome-shown" 2>/dev/null || return 0
+fi
+
+__rch() {
+  local B='' D='' R='' fam='' name vers='' n=0 id gpu port=7860 hfslow r d x py line
+  if { [ -t 1 ] || [ -n "${RC_WELCOME_COLOR:-}" ]; } && [ -z "${NO_COLOR:-}" ] && [ "${TERM:-dumb}" != dumb ]; then
+    B=$'\e[1m'; D=$'\e[2m'; R=$'\e[0m'
+  fi
+  hfslow='pip install modelscope; modelscope download --model <id>'
+  # One python call: family by probing installed packages, and their versions (metadata only, no imports).
+  py=$(command -v python3 || command -v python)
+  if [ -n "$py" ]; then
+    x=$(timeout 2 "$py" - 2>/dev/null <<'PY'
+import os
+from importlib import metadata as m, util as u
+fam = ""
+if u.find_spec("sglang"): fam = "sglang"
+elif u.find_spec("vllm"): fam = "vllm"
+elif os.path.isdir("/opt/ComfyUI"): fam = "comfyui"
+elif u.find_spec("torch"): fam = "pytorch"
+out = []
+for pkg, label in (("torch", "PyTorch"), ("vllm", "vLLM"), ("sglang", "SGLang")):
+    try: out.append(f"{label} {m.version(pkg).split('+')[0]}")
+    except Exception: pass
+print(fam + "|" + "".join(" · " + s for s in out))
+PY
+)
+    fam=${x%%|*}; vers=${x#*|}
+  fi
+  fam=${RC_WELCOME_FAMILY:-$fam}
+  x=$(cut -d- -f1 /opt/rocm/.info/version 2>/dev/null)
+  if [ -z "$x" ]; then for r in /opt/rocm-[0-9]*; do [ -d "$r" ] && x=${r#/opt/rocm-}; done; fi
+  [ -n "$x" ] && vers="ROCm $x$vers"
+  vers=${vers# · }
+  case "$fam" in sglang) name=SGLang;; vllm) name=vLLM;; comfyui) name=ComfyUI;; pytorch) name=PyTorch;; *) name='Radeon Cloud instance';; esac
+  for r in /dev/dri/renderD*; do
+    [ -e "$r" ] || continue; d=/sys/class/drm/${r##*/}/device
+    [ -r "$d/vendor" ] && [ "$(cat "$d/vendor")" = 0x1002 ] || continue
+    n=$((n+1)); id=$(cat "$d/device" 2>/dev/null)
+  done
+  case "$id" in 0x744b) gpu='Radeon PRO W7900D (48 GB)';; 0x7448) gpu='Radeon PRO W7900 (48 GB)';; 0x7551) gpu='Radeon AI PRO R9700 (32 GB)';; *) gpu='AMD Radeon GPU';; esac
+  x=$(__rch_text "$fam" | sed -n 's/^# port=\([0-9]*\).*/\1/p' | head -1); [ -n "$x" ] && port=$x
+  x=$(__rch_text "$fam" | sed -n 's/^# hfslow=//p' | head -1); [ -n "$x" ] && hfslow=$x
+  printf '%s%s%s\n' "$B" "$name" "$R"
+  [ -n "$vers" ] && printf '%s\n' "$vers"
+  [ "$n" -gt 0 ] && printf '%s GPU%s: %s\n' "$n" "$([ "$n" -gt 1 ] && echo s)" "$gpu"
+  echo
+  { __rch_text "$fam"; [ -n "$(__rch_text "$fam")" ] && echo; __rch_text common; } | while IFS= read -r line || [ -n "$line" ]; do
+    case "$line" in '# '*=*) continue;; esac
+    # Quoted replacements: bash 5.2 would otherwise expand '&' in the values.
+    line=${line//\{B\}/"$B"}; line=${line//\{D\}/"$D"}; line=${line//\{R\}/"$R"}
+    line=${line//\{PORT\}/"$port"}; line=${line//\{HFSLOW\}/"$hfslow"}; line=${line//\{README\}/}
+    printf '%s\n' "$line"
+  done
+}
+# Texts from help/text/*.txt, inlined by help/build_configmap.py.
+__rch_text() {
+  case "$1" in
+@@TEXTS@@
+  esac
+}
+__rch 2>/dev/null
+unset -f __rch __rch_text
+return 0 2>/dev/null || true
