@@ -48,6 +48,18 @@ sleep 10
 # OpenAI-style images API. (11-13: this failed with KeyError: 'sglang.multimodal_gen' because the diffusion extras were
 # missing.) The model is fetched first, with retries, so a slow mirror read does not fail the smoke.
 python3 -c 'import sglang.multimodal_gen.runtime.entrypoints.cli.serve, moviepy, cache_dit; from diffusers import QwenImage21Pipeline; print("sglang diffusion: imports OK")'
+# The PNG-default fix lives inside SGLang only: plain PIL must still refuse RGBA -> JPEG as upstream does.
+python3 -c 'import io; from PIL import Image
+try:
+    Image.new("RGBA", (4, 4)).save(io.BytesIO(), format="JPEG")
+except OSError:
+    print("PIL outside SGLang: RGBA -> JPEG still raises (upstream behaviour)")
+else:
+    raise SystemExit("FAIL: PIL RGBA -> JPEG no longer raises; the SGLang fix leaked into PIL")'
+python3 -c 'from sglang.multimodal_gen.runtime.entrypoints.openai import image_api as a
+assert a.choose_output_image_ext(None, None) == "png", "default image format is not png"
+assert a.choose_output_image_ext("jpeg", None) == "jpg", "explicit jpeg was not kept"
+print("SGLang images API: default format png, explicit format kept")'
 DMODEL=Qwen/Qwen-Image-2.1
 for attempt in 1 2 3; do
   HF_HUB_DOWNLOAD_TIMEOUT=60 python3 -c 'import sys; from huggingface_hub import snapshot_download as s; s(sys.argv[1])' "$DMODEL" > /dev/null 2>&1 && break

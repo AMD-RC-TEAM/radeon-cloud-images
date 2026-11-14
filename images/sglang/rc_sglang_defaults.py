@@ -7,9 +7,10 @@ defaults only (an explicit command-line value always wins):
     triton, the backend the RDNA3 plugin validates (sglang-rdna3 serve-args).
   - CUDA/HIP graphs: capture hangs on gfx1100 (sgl-project/sglang#30245), so they are off by default. Throughput
     is therefore not tuned. Set RC_SGLANG_CUDA_GRAPH=1 to leave SGLang's own setting alone.
-It also fixes one SGLang-Diffusion bug when `PIL.Image` is imported: the OpenAI images API defaults to JPEG, and
-models that return RGBA frames (Qwen-Image) then fail with "cannot write mode RGBA as JPEG" (HTTP 500). Saving an
-image that has an alpha channel or a palette as JPEG now converts it to RGB first; every other save is unchanged.
+It also fixes one SGLang-Diffusion bug, inside SGLang only: the OpenAI images API picks JPEG when the request gives
+no output_format, and models that return RGBA frames (Qwen-Image) then fail with "cannot write mode RGBA as JPEG"
+(HTTP 500). When `sglang.multimodal_gen.runtime.entrypoints.openai.utils` is imported, its default becomes PNG. An
+explicit output_format is kept as asked. PIL itself is not changed, so users' own code behaves as upstream.
 Set RC_SGLANG_DEFAULTS=0 to disable this module entirely.
 """
 import importlib.abc
@@ -18,7 +19,7 @@ import os
 import sys
 
 TARGET = "sglang.srt.server_args"
-PIL_TARGET = "PIL.Image"
+IMAGE_UTILS_TARGET = "sglang.multimodal_gen.runtime.entrypoints.openai.utils"
 
 
 def _patch(module):
@@ -42,25 +43,21 @@ def _patch(module):
     cls._rc_rdna3_defaults = True
 
 
-def _patch_pil(module):
-    cls = getattr(module, "Image", None)
-    if cls is None or getattr(cls, "_rc_jpeg_alpha_fix", False):
+def _patch_image_utils(module):
+    original = getattr(module, "choose_output_image_ext", None)
+    if original is None or getattr(original, "_rc_png_default", False):
         return
-    original_save = cls.save
 
-    def save(self, fp, format=None, **params):
-        fmt = (format or "").upper()
-        if not fmt and isinstance(fp, (str, os.PathLike)):
-            fmt = module.registered_extensions().get(os.path.splitext(os.fspath(fp))[1].lower(), "")
-        if fmt in ("JPEG", "JPG") and self.mode in ("RGBA", "LA", "P", "PA", "RGBa", "La"):
-            return original_save(self.convert("RGB"), fp, format, **params)
-        return original_save(self, fp, format, **params)
+    def choose_output_image_ext(output_format, background):
+        if not (output_format or "").strip():
+            return "png"
+        return original(output_format, background)
 
-    cls.save = save
-    cls._rc_jpeg_alpha_fix = True
+    choose_output_image_ext._rc_png_default = True
+    module.choose_output_image_ext = choose_output_image_ext
 
 
-PATCHES = {TARGET: _patch, PIL_TARGET: _patch_pil}
+PATCHES = {TARGET: _patch, IMAGE_UTILS_TARGET: _patch_image_utils}
 
 
 class _Loader(importlib.abc.Loader):
