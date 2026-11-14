@@ -1,0 +1,32 @@
+"""Download a pinned GitHub source tarball at build time, with retries (connections to github.com from the build
+cluster drop intermittently).
+
+    python3 fetch_src.py tar <owner/repo> <40-hex commit> <dest dir>
+"""
+import io, os, re, sys, tarfile, time, urllib.request
+
+
+def get(url):
+    for attempt in range(6):
+        try:
+            return urllib.request.urlopen(url, timeout=180).read()
+        except Exception as e:  # noqa: BLE001 -- retry any network error
+            print(f"attempt {attempt + 1} for {url} failed: {e}", flush=True)
+            time.sleep(20)
+    sys.exit(f"could not download {url}")
+
+
+kind = sys.argv[1]
+if kind == "tar":
+    repo, commit, dest = sys.argv[2:5]
+    assert re.fullmatch(r"[0-9a-f]{40}", commit), "pin a full commit"
+    data = get(f"https://codeload.github.com/{repo}/tar.gz/{commit}")
+    parent = os.path.dirname(dest.rstrip("/")) or "."
+    os.makedirs(parent, exist_ok=True)
+    with tarfile.open(fileobj=io.BytesIO(data)) as t:
+        root = t.getnames()[0].split("/")[0]
+        t.extractall(parent, filter="data")
+    os.rename(os.path.join(parent, root), dest)
+    print(f"{repo}@{commit[:12]}: {len(data)} bytes -> {dest}")
+else:
+    sys.exit(__doc__)

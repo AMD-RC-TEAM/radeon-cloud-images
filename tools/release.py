@@ -215,7 +215,9 @@ def _smoke_in(ns, m, candidate):
                "volumes": [{"name": "smoke", "configMap": {"name": name}}]}}}}
     subprocess.run(["kubectl", "apply", "-f", "-"], input=json.dumps(job), text=True, check=True, capture_output=True)
     try:
-        r = subprocess.run(["kubectl", "-n", ns, "wait", f"job/{name}", "--for=condition=complete", "--timeout=3700s"],
+        # Give up before the Job's activeDeadlineSeconds (3600): at the deadline Kubernetes deletes the pod and its
+        # logs, so a hung smoke used to fail with no output at all (11-13 #15).
+        r = subprocess.run(["kubectl", "-n", ns, "wait", f"job/{name}", "--for=condition=complete", "--timeout=3480s"],
                            text=True, capture_output=True)
         logs = sh("kubectl", "-n", ns, "logs", f"job/{name}", "--tail=200", check=False)
         print(logs)

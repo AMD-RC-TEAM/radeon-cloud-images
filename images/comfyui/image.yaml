@@ -1,0 +1,7 @@
+# Release settings for this image (read by tools/release.py and tools/upstream_check.py).
+name: comfyui
+rc_repo: rc/comfyui               # Harbor: 10.5.10.12:1808/radeon-cloud-global/rc/comfyui:rc-current is what the catalog stable row tracks
+catalog_row: "ComfyUI"           # the stable catalog row only; template rows are never touched
+smoke: comfyui                 # which smoke profile images/comfyui/smoke.sh runs (see README)
+upstream:            # the registry/repo come from the Dockerfile's FROM line
+  tag_regex: '^rocm7\.[0-9]+\.[0-9]+_ubuntu24\.04_py3\.12_pytorch_release_2\.[0-9]+\.[0-9]+$'         # base upgrades; ComfyUI itself is pinned by COMFYUI_COMMIT
