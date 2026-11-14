@@ -9,8 +9,16 @@ case $- in *i*) ;; *) return 0 2>/dev/null || exit 0 ;; esac
 if ! command -v rc-tunnel >/dev/null 2>&1 && [ -r /var/run/secrets/frp-self-service/install ]; then
   rc-tunnel() {
     if [ ! -x "$HOME/.local/bin/rc-tunnel" ]; then
-      sh /var/run/secrets/frp-self-service/install >/dev/null 2>&1 \
-        || { echo "rc-tunnel: install failed; run: sh /var/run/secrets/frp-self-service/install" >&2; return 1; }
+      # Quiet when the install works; on failure show the installer's own output, then what to do.
+      local out rc=0
+      out=$(sh /var/run/secrets/frp-self-service/install 2>&1) || rc=$?
+      if [ "$rc" -ne 0 ] || [ ! -x "$HOME/.local/bin/rc-tunnel" ]; then
+        [ -n "$out" ] && printf '%s\n' "$out" >&2
+        if [ "$rc" -eq 0 ]; then echo "rc-tunnel: the installer finished but ~/.local/bin/rc-tunnel is missing." >&2
+        else echo "rc-tunnel: install failed (exit $rc)." >&2; fi
+        echo "Run it again: sh /var/run/secrets/frp-self-service/install -- if it still fails, send this output to Radeon Cloud support." >&2
+        return 1
+      fi
     fi
     "$HOME/.local/bin/rc-tunnel" "$@"
   }
