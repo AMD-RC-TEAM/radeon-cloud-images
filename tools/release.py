@@ -284,7 +284,9 @@ def probe(ref, name="probe"):
                         # The CI node already holds the released images, so most probes start without a pull.
                         "nodeSelector": {"amd-oneclick.io/workload-ci": "enabled"},
                         "containers": [{"name": "probe", "image": ref,
-                                        "command": ["/bin/sh", "-c", "python3 /probe/versions_probe.py || python /probe/versions_probe.py"],
+                                        # The runner's ServiceAccount cannot read pod logs in this namespace, so the line also
+                                        # goes to the termination message (read from the pod status, as build() does).
+                                        "command": ["/bin/sh", "-c", "{ python3 /probe/versions_probe.py || python /probe/versions_probe.py; } | tee /dev/termination-log"],
                                         "resources": {"requests": {"cpu": "100m", "memory": "256Mi"},
                                                       "limits": {"cpu": "1", "memory": "2Gi"}},
                                         "volumeMounts": [{"name": "probe", "mountPath": "/probe"}]}],
@@ -301,6 +303,8 @@ def probe(ref, name="probe"):
                 break
             time.sleep(10)
         logs = sh("kubectl", "-n", BUILD_NS, "logs", f"job/{job_name}", "--tail=20", check=False)
+        logs += "\n" + sh("kubectl", "-n", BUILD_NS, "get", "pods", "-l", f"job-name={job_name}", "-o",
+                          "jsonpath={..state.terminated.message}", check=False)
         print(logs)
         if not ok:
             print(sh("kubectl", "-n", BUILD_NS, "get", "pods", "-l", f"job-name={job_name}", "-o", "wide", check=False))
