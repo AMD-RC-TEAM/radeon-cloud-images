@@ -1,0 +1,4 @@
+# port=7860
+{B}Quick start{R}
+  python -c "import torch; print(torch.cuda.get_device_name(0))"
+  {D}PyTorch here is built for ROCm; don't pip install torch.{R}

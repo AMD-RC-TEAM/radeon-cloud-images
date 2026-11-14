@@ -1,0 +1,4 @@
+# port=8188
+{B}Quick start{R}
+  comfyui-start                 {D}# ComfyUI on port 8188{R}
+  {D}No models included; put them in /opt/ComfyUI/models or /workspace.{R}
