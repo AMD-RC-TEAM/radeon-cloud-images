@@ -7,7 +7,8 @@
 # SGLang 51b27f7 (main, 2026-08-24, between v0.5.18 and v0.5.19); against newer SGLang (0.5.23) its patches no
 # longer apply and it refuses to build. This is the newest SGLang that works on gfx1100 today. Upgrade when a plugin
 # release supports newer SGLang: the upgrade bot watches the plugin on PyPI (image.yaml watch_pypi).
-# SGLang-Diffusion's extra packages are not included yet.
+# SGLang-Diffusion: its extra packages are pinned in requirements-diffusion.txt (see its header for what differs from
+# SGLang's [diffusion] extra and what is left out as CUDA-only).
 FROM docker.io/rocm/pytorch:rocm7.2.4_ubuntu24.04_py3.12_pytorch_release_2.10.0@sha256:4449f856653602317e4101a76fce599c7fcd58ccec2e539951fce5f73083179e
 
 # The build sets this to a PyPI mirror reachable from the build cluster; it is not kept in the image.
@@ -17,14 +18,15 @@ ARG SGLANG_COMMIT=51b27f747ade4a267f37a29457bc8c690100ca9e
 ARG SGLANG_VERSION=0.5.19.dev338+g51b27f7
 
 # Every package installed over the base is pinned in requirements.txt (see its header), installed with --no-deps.
-COPY requirements.txt fetch_sglang_src.py /tmp/
+COPY requirements.txt requirements-diffusion.txt fetch_sglang_src.py /tmp/
 RUN python3 /tmp/fetch_sglang_src.py ${SGLANG_COMMIT} /opt/sglang-src \
  && pip install --no-cache-dir --no-deps -r /tmp/requirements.txt \
+ && pip install --no-cache-dir --no-deps -r /tmp/requirements-diffusion.txt \
  && SETUPTOOLS_SCM_PRETEND_VERSION=${SGLANG_VERSION} SGLANG_BUILD_RUST_EXTS=none \
     pip install --no-cache-dir --no-deps --no-build-isolation /opt/sglang-src/python \
  && pip install --no-cache-dir /opt/rocm/share/amd_smi \
  && sglang-rdna3 build-kernel --sglang-src /opt/sglang-src --target gfx1100 --jobs 16 --install \
- && rm -rf /tmp/requirements.txt /tmp/fetch_sglang_src.py /root/.cache \
+ && rm -rf /tmp/requirements.txt /tmp/requirements-diffusion.txt /tmp/fetch_sglang_src.py /root/.cache \
  && (pip check | grep -v -i -E "torch|triton|rocm|nvidia|cuda|flashinfer|sgl|tilelang|quack|deep|mistral|tokenspeed" > /opt/pip-check.txt || true)
 
 # RDNA3 serving defaults (triton attention, no CUDA graphs), so a plain `python -m sglang.launch_server` works.
