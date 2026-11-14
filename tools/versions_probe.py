@@ -27,7 +27,17 @@ def rocm():
         except OSError:
             pass
     dirs = sorted(d for d in glob.glob("/opt/rocm-[0-9]*") if os.path.isdir(d))
-    return dirs[-1].split("rocm-", 1)[1] if dirs else None
+    if dirs:
+        return dirs[-1].split("rocm-", 1)[1]
+    # ROCm installed as Python wheels (TheRock / rocm-sdk, e.g. vLLM on ROCm 10) has no /opt/rocm/.info: use the
+    # ROCm version PyTorch was built for ("2.13.0+rocm10.0.0" -> "10.0.0"), or the rocm-sdk package version.
+    try:
+        m = re.search(r"\+rocm(\d+(?:\.\d+)*)", metadata.version("torch"))
+        if m:
+            return m.group(1)
+    except Exception:
+        pass
+    return pkg("rocm-sdk-core", "rocm")
 
 
 def comfyui():

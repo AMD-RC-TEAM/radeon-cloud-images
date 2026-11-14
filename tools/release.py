@@ -291,14 +291,23 @@ def probe(ref, name="probe"):
                         "volumes": [{"name": "probe", "configMap": {"name": job_name}}]}}}}
     subprocess.run(["kubectl", "apply", "-f", "-"], input=json.dumps(job), text=True, check=True, capture_output=True)
     try:
-        r = subprocess.run(["kubectl", "-n", BUILD_NS, "wait", f"job/{job_name}", "--for=condition=complete",
-                            "--timeout=2300s"], text=True, capture_output=True)
+        # Poll like build() does: the runner's ServiceAccount can get Jobs but `kubectl wait` (watch) failed in CI.
+        ok, deadline = False, time.time() + 2300
+        while time.time() < deadline:
+            st = json.loads(sh("kubectl", "-n", BUILD_NS, "get", "job", job_name, "-o", "json")).get("status", {})
+            if st.get("succeeded"):
+                ok = True; break
+            if st.get("failed"):
+                break
+            time.sleep(10)
         logs = sh("kubectl", "-n", BUILD_NS, "logs", f"job/{job_name}", "--tail=20", check=False)
         print(logs)
+        if not ok:
+            print(sh("kubectl", "-n", BUILD_NS, "get", "pods", "-l", f"job-name={job_name}", "-o", "wide", check=False))
     finally:
         sh("kubectl", "-n", BUILD_NS, "delete", "job", job_name, "--wait=true", "--timeout=180s", check=False)
         sh("kubectl", "-n", BUILD_NS, "delete", cm, check=False)
-    if r.returncode or not report_versions(name, ref, logs):
+    if not ok or not report_versions(name, ref, logs):
         raise SystemExit(f"versions probe failed for {ref}")
 
 
@@ -321,9 +330,15 @@ def main():
     ap.add_argument("--probe", action="store_true", help="only print the versions of an existing digest (no GPU)")
     a = ap.parse_args()
     if a.probe:
+        failed = []
         for item in a.image.split():
             name, _, ref = item.partition("=")
-            probe(ref, name)
+            try:
+                probe(ref, name)
+            except SystemExit as e:   # keep going: one bad digest must not hide the others
+                print(e); failed.append(name)
+        if failed:
+            raise SystemExit(f"versions probe failed for: {', '.join(failed)}")
         return
     m = parse(a.image)
     print(json.dumps({k: v for k, v in m.items() if k != "dir"}, ensure_ascii=False))
