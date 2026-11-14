@@ -1,0 +1,31 @@
+# Print the key software versions of images that are already released (D-20261114-08): a one-off backfill for
+# catalog rows released before the release smoke started reporting them. No GPU, no CI slot, nothing is promoted.
+# catalog_sync reads the "RC-VERSIONS-OF <digest> {...}" lines from this run's log.
+name: versions-probe
+on:
+  workflow_dispatch:
+    inputs:
+      refs: {description: "space-separated <name>=<registry/repo@sha256:...> pairs", required: true}
+concurrency: {group: "versions-probe", cancel-in-progress: false}
+permissions: {contents: read}
+jobs:
+  probe:
+    runs-on: [self-hosted, radeon-images]
+    steps:
+      - name: Checkout with long retries (Wuxi egress to github.com drops for minutes; 11-12 11:12-11:18Z, 11:56-12:00Z)
+        env: {TOKEN: "${{ github.token }}", BASE: ""}
+        run: |
+          set -u; cd "$GITHUB_WORKSPACE"; find . -mindepth 1 -maxdepth 1 -exec rm -rf {} +
+          git init -q . && git remote add origin "https://github.com/${GITHUB_REPOSITORY}"
+          auth="AUTHORIZATION: basic $(printf 'x-access-token:%s' "$TOKEN" | base64 -w0)"
+          refs=("+${GITHUB_SHA}:refs/remotes/origin/_head"); [ -n "$BASE" ] && refs+=("+refs/heads/${BASE}:refs/remotes/origin/${BASE}")
+          for i in $(seq 1 10); do
+            if git -c http.extraHeader="$auth" -c http.lowSpeedLimit=1000 -c http.lowSpeedTime=60 fetch -q --no-tags --depth=100 origin "${refs[@]}"; then
+              git checkout -q --detach "$GITHUB_SHA" && echo "checked out ${GITHUB_SHA::8} (attempt $i)" && exit 0
+            fi
+            echo "fetch attempt $i failed; retrying in 60 s"; sleep 60
+          done
+          echo "::error::could not reach github.com after 10 attempts"; exit 1
+      - name: Probe versions
+        env: {REFS: "${{ inputs.refs }}"}
+        run: python3 tools/release.py --probe "$REFS"

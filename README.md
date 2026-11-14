@@ -43,6 +43,15 @@ tools/
    previous digest and the daily issue says why.
 6. **Failure anywhere:** nothing further moves; one line in the day's "image pipeline daily" issue.
 
+## Versions in the picker (D-20261114-08)
+
+After a smoke passes, the release runs `tools/versions_probe.py` in the same container and prints
+`RC-VERSIONS-OF <digest> {"image": ..., "versions": {"ROCm": ..., "Python": ..., "PyTorch": ..., ...}}` in the run log.
+catalog_sync (outside CI) reads that line when it moves a stable row to the digest and sets the row description to
+`<one-line purpose> · ROCm 7.2.3 · Python 3.12 · PyTorch 2.10.0 · ...`; the "(previous)" row keeps the versions of its
+older digest. For digests released before this existed, run the `versions-probe` workflow with
+`<name>=<registry/repo@sha256:...>` pairs (no GPU, no CI slot, nothing promoted).
+
 ## JupyterLab in every stable image
 Radeon Cloud's launch step checks the image for `jupyter` on PATH, Python 3.10-3.12, `jupyter_server` >=2.14,<3 and
 `jupyterlab` >=4.2,<5. If they are missing, it pip-installs JupyterLab on every launch (measured 18-188 s, 11-13).
