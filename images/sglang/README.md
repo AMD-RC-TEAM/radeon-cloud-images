@@ -28,6 +28,9 @@ curl http://127.0.0.1:30010/v1/images/generations -H 'Content-Type: application/
   without offload. Larger diffusion models may need `--component-residency text_encoder=component-offload` or more cards.
 - Qwen-Image-2.1 is not in this SGLang version's native model list; it runs through SGLang's generic diffusers path,
   which is why the image carries diffusers 0.43 (SGLang's own pin, 0.37, predates that model).
+- Output format: in this image, a request without `output_format` returns PNG. Upstream SGLang defaults to JPEG, which
+  fails with HTTP 500 for models that return images with an alpha channel, such as Qwen-Image. Asking for
+  `"output_format": "jpeg"` explicitly still hits that upstream bug with those models; use `png` or `webp`.
 - Not included because they are CUDA-only: `nvidia-modelopt` (NVFP4/FP8 quantized checkpoints), `st_attn` and `vsa`
   (sparse/sliding-tile attention backends). Models that need them do not run here.
 
