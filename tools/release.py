@@ -21,6 +21,7 @@ BUILD_NS = "amd-oneclick-ci-runners"
 KANIKO = PULL + "/kaniko-project/executor@sha256:8a4f9af8ef55ef8bfaf4cfd7b15dc956609e14a4402efefd5fb2e49a0c06e2c8"  # v1.23.2
 PIP_INDEX = "https://mirrors.aliyun.com/pypi/simple/"   # pypi.org is not reachable from the cluster
 HF_ENDPOINT = "https://hf-mirror.com"                   # huggingface.co is not reachable either
+HF_CACHE_HOSTPATH = "/nvme0/data/rc-images-ci-hf-cache"   # on the CI node (amd-oneclick.io/workload-ci=enabled)
 
 
 def sh(*cmd, check=True, **kw):
@@ -208,11 +209,16 @@ def _smoke_in(ns, m, candidate):
                "nodeSelector": {"amd-oneclick.io/workload-ci": "enabled"},
                "containers": [{"name": "smoke", "image": candidate, "command": ["/bin/bash", "/smoke/smoke.sh"],
                                "env": [{"name": "SMOKE_MODEL_DIR", "value": "/models/Qwen2.5-0.5B-Instruct"},
-                                       {"name": "HF_ENDPOINT", "value": HF_ENDPOINT}],
+                                       {"name": "HF_ENDPOINT", "value": HF_ENDPOINT},
+                                       # Persistent HF cache on the CI node (seeded with Qwen3-8B and the SD1.5 fp16
+                                       # checkpoint) so a release does not re-download ~18 GB per image.
+                                       {"name": "HF_HOME", "value": "/hf-cache"}],
                                "resources": {"limits": {"amd.com/gpu": "1", "memory": "48Gi", "cpu": "8"},
                                              "requests": {"amd.com/gpu": "1", "memory": "16Gi", "cpu": "4"}},
-                               "volumeMounts": [{"name": "smoke", "mountPath": "/smoke"}]}],
-               "volumes": [{"name": "smoke", "configMap": {"name": name}}]}}}}
+                               "volumeMounts": [{"name": "smoke", "mountPath": "/smoke"},
+                                                {"name": "hf-cache", "mountPath": "/hf-cache"}]}],
+               "volumes": [{"name": "smoke", "configMap": {"name": name}},
+                           {"name": "hf-cache", "hostPath": {"path": HF_CACHE_HOSTPATH, "type": "DirectoryOrCreate"}}]}}}}
     subprocess.run(["kubectl", "apply", "-f", "-"], input=json.dumps(job), text=True, check=True, capture_output=True)
     try:
         # Give up before the Job's activeDeadlineSeconds (3600): at the deadline Kubernetes deletes the pod and its

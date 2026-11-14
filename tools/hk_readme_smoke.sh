@@ -31,11 +31,14 @@ python3 -c "import hk; print('hk-dsl', hk.__version__)" || { echo "FAIL: import 
 # The serve below then loads it from the cache, exactly as the README's command would after a download.
 echo "== download $MODEL via ${HF_ENDPOINT:-huggingface.co}"
 for attempt in 1 2 3; do
-    HF_HUB_DOWNLOAD_TIMEOUT=60 python3 -c 'import sys; from huggingface_hub import snapshot_download as s; s(sys.argv[1])' "$MODEL" \
+    echo "download attempt $attempt ($(date -u +%H:%M:%S)Z)"
+    timeout "${DOWNLOAD_TIMEOUT:-900}" env HF_HUB_DOWNLOAD_TIMEOUT=60 python3 -c 'import sys; from huggingface_hub import snapshot_download as s; s(sys.argv[1])' "$MODEL" \
         > /dev/null 2>&1 && break
-    echo "download attempt $attempt failed; retrying"; sleep 10
+    echo "download attempt $attempt failed or took over ${DOWNLOAD_TIMEOUT:-900}s; retrying (resumes from the cache)"; sleep 10
 done
 
+python3 -c 'import sys; from huggingface_hub import snapshot_download as s; s(sys.argv[1], local_files_only=True)' "$MODEL" > /dev/null 2>&1 \
+    || { echo "FAIL: could not download $MODEL from ${HF_ENDPOINT:-huggingface.co} (mirror slow or down); rerun later"; exit 1; }
 echo "== vllm serve $MODEL (log: $LOG)"
 vllm serve "$MODEL" --port "$PORT" > "$LOG" 2>&1 &
 pid=$!
