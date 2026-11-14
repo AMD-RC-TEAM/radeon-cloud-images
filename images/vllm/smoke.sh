@@ -8,7 +8,9 @@ welcome_once
 welcome_jupyter_terminal
 rc_tunnel_shim
 # D-20261113-31: the vLLM images (only) recommend hk-dsl in the first-terminal tips.
-h=$(mktemp -d); HOME=$h bash -i -c true 2>/dev/null | grep -q 'hk-dsl' || { echo "FAIL: no hk-dsl line in the tips"; exit 1; }
+# Capture first: with pipefail, `| grep -q` can exit before bash finishes writing and fail the pipeline on SIGPIPE.
+h=$(mktemp -d); tips=$(HOME=$h bash -i -c true 2>/dev/null || true)
+grep -q 'hk-dsl' <<<"$tips" || { echo "FAIL: no hk-dsl line in the tips"; exit 1; }
 echo "welcome: hk-dsl tip present"
 MODEL=${SMOKE_MODEL_DIR:-/models/Qwen2.5-0.5B-Instruct}
 grep -m1 -E 'gfx11[0-9]{2}' <<<"$(rocminfo)"

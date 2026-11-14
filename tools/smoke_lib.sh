@@ -30,8 +30,8 @@ welcome_once() {
   [ -z "$(HOME=$h bash -c 'true' 2>&1 | welcome_block)" ] || { echo "FAIL: welcome printed in a non-interactive shell"; return 1; }
   first=$(HOME=$h bash -i -c 'true' 2>/dev/null | welcome_block)
   [ -n "$first" ] || { echo "FAIL: no welcome in the first interactive shell"; return 1; }
-  printf '%s\n' "$first" | grep -q 'rc-tunnel expose --port' || { echo "FAIL: no tunnel line in the help"; return 1; }
-  printf '%s\n' "$first" | grep -q '^  No GitHub?' || { echo "FAIL: no Downloads block in the help"; return 1; }
+  grep -q 'rc-tunnel expose --port' <<<"$first" || { echo "FAIL: no tunnel line in the help"; return 1; }
+  grep -q '^  No GitHub?' <<<"$first" || { echo "FAIL: no Downloads block in the help"; return 1; }
   [ "$(printf '%s\n' "$first" | awk 'length > 80' | wc -l)" -eq 0 ] || { echo "FAIL: help line wider than 80 columns"; return 1; }
   [ -z "$(HOME=$h bash -i -c 'true' 2>/dev/null | welcome_block)" ] || { echo "FAIL: welcome printed twice"; return 1; }
   echo "welcome: once in an interactive shell, silent otherwise"; printf '%s\n' "$first" | sed 's/^/  | /'
@@ -105,7 +105,7 @@ rc_tunnel_shim() {
   [ "$(command -v rc-tunnel)" = /usr/local/bin/rc-tunnel ] || { echo "FAIL: rc-tunnel shim not on PATH"; return 1; }
   local h out; h=$(mktemp -d)
   if out=$(HOME=$h rc-tunnel version 2>&1); then echo "FAIL: shim succeeded without a secret bundle"; return 1; fi
-  printf '%s' "$out" | grep -q 'not available here' || { echo "FAIL: unexpected shim message: $out"; return 1; }
+  grep -q 'not available here' <<<"$out" || { echo "FAIL: unexpected shim message: $out"; return 1; }
   # With an installer: the first call installs, shows nothing of the installer on stdout, and passes the arguments on;
   # a failing installer's output reaches the user.
   local fake; fake=$(mktemp -d)
@@ -122,6 +122,6 @@ SH
   out=$(HOME=$h RC_TUNNEL_INSTALLER=$fake/bad rc-tunnel status 2>/dev/null) || { echo "FAIL: shim reinstalled over an installed binary"; return 1; }
   h=$(mktemp -d)
   if out=$(HOME=$h RC_TUNNEL_INSTALLER=$fake/bad rc-tunnel status 2>&1); then echo "FAIL: shim ignored a failing installer"; return 1; fi
-  printf '%s' "$out" | grep -q 'broker unreachable' || { echo "FAIL: installer error hidden: $out"; return 1; }
+  grep -q 'broker unreachable' <<<"$out" || { echo "FAIL: installer error hidden: $out"; return 1; }
   echo "rc-tunnel shim: on PATH; explains itself outside an instance; installs once, passes arguments, shows installer errors"
 }
