@@ -13,9 +13,10 @@ command -v comfyui-start >/dev/null || { echo "FAIL: comfyui-start missing"; exi
 
 CKPT=/opt/ComfyUI/models/checkpoints/v1-5-pruned-emaonly-fp16.safetensors
 for attempt in 1 2 3; do
-  HF_HUB_DOWNLOAD_TIMEOUT=60 python3 -c 'import os, shutil, sys; from huggingface_hub import hf_hub_download as d
+  echo "checkpoint download attempt $attempt ($(date -u +%H:%M:%S)Z)"
+  timeout 600 env HF_HUB_DOWNLOAD_TIMEOUT=60 python3 -c 'import os, shutil, sys; from huggingface_hub import hf_hub_download as d
 p = d("stable-diffusion-v1-5/stable-diffusion-v1-5", "v1-5-pruned-emaonly-fp16.safetensors"); shutil.copy(p, sys.argv[1])' "$CKPT" && break
-  echo "checkpoint download attempt $attempt failed; retrying"; sleep 10
+  echo "checkpoint download attempt $attempt failed or took over 10 min; retrying (the download resumes from its cache)"; sleep 10
 done
 [ -s "$CKPT" ] || { echo "FAIL: could not download the SD1.5 checkpoint"; exit 1; }
 (comfyui-start >/tmp/comfyui.log 2>&1 &)
