@@ -4,13 +4,7 @@
 set -euo pipefail
 . "$(dirname "$0")/smoke_lib.sh"
 jupyterlab_fast_path
-welcome_once
-welcome_jupyter_terminal
-# D-20261113-31: the vLLM images (only) recommend hk-dsl in the first-terminal tips.
-# Capture first: with pipefail, `| grep -q` can exit before bash finishes writing and fail the pipeline on SIGPIPE.
-h=$(mktemp -d); tips=$(HOME=$h bash -i -c true 2>/dev/null || true)
-grep -q 'pip install hk-dsl' <<<"$tips" || { echo "FAIL: no hk-dsl line in the tips"; exit 1; }
-echo "welcome: hk-dsl tip present"
+no_in_image_welcome
 MODEL=${SMOKE_MODEL_DIR:-/models/Qwen2.5-0.5B-Instruct}
 grep -m1 -E 'gfx11[0-9]{2}' <<<"$(rocminfo)"
 python3 -c 'import vllm, torch; print("vllm", vllm.__version__, "torch", torch.__version__); assert torch.cuda.is_available()'

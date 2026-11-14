@@ -1,4 +1,0 @@
-Expose a web app from this instance:
-  sh /var/run/secrets/frp-self-service/install   # once, in a Notebook terminal; then open a new terminal
-  rc-tunnel expose --port 8188                   # prints https://rc-<id>.radeon.firstdg.ai
-  rc-tunnel status | rc-tunnel logs | rc-tunnel stop

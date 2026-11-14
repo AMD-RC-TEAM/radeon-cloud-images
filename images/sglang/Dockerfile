@@ -52,10 +52,5 @@ ENV GPU_ARCHS=gfx1100 \
 EXPOSE 30000
 CMD ["bash"]
 
-# First-terminal tips (tools/welcome/, put into every build context as rc-welcome/): what this image is and how
-# to expose a web app with rc-tunnel. Printed once per home directory; `bash -c` and scripts stay silent.
-COPY rc-welcome/ /tmp/rc-welcome/
-RUN sh /tmp/rc-welcome/add_welcome.sh "SGLang LLM serving for Radeon (RDNA3)" "/opt/sglang/README.md" && rm -rf /tmp/rc-welcome
-
 # JupyterLab terminals start "$SHELL -l" and fall back to sh when SHELL is unset (no history, no tab completion).
 ENV SHELL=/bin/bash

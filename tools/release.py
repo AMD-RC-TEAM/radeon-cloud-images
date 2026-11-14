@@ -75,17 +75,11 @@ def ensure_mirror(m):
         raise SystemExit("mirror failed or digest not in Harbor afterwards")
 
 
-WELCOME_DIR = os.path.join(ROOT, "tools", "welcome")
-
-
 def context_files(m):
-    """Everything in the image directory except the release settings and the smoke script, plus the shared
-    first-shell tips (tools/welcome/) as rc-welcome/<file>. Returns sorted (name in the context, local path)."""
-    own = [(f, os.path.join(m["dir"], f)) for f in os.listdir(m["dir"])
-           if f not in ("image.yaml", "smoke.sh") and os.path.isfile(os.path.join(m["dir"], f))]
-    shared = [(f"rc-welcome/{f}", os.path.join(WELCOME_DIR, f)) for f in os.listdir(WELCOME_DIR)
-              if os.path.isfile(os.path.join(WELCOME_DIR, f))] if os.path.isdir(WELCOME_DIR) else []
-    return sorted(own + shared)
+    """Everything in the image directory except the release settings and the smoke script.
+    Returns sorted (name in the context, local path)."""
+    return sorted((f, os.path.join(m["dir"], f)) for f in os.listdir(m["dir"])
+                  if f not in ("image.yaml", "smoke.sh") and os.path.isfile(os.path.join(m["dir"], f)))
 
 
 def context_tag(m):
