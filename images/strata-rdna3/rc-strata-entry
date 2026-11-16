@@ -1,0 +1,13 @@
+#!/bin/sh
+# Image entrypoint. Radeon Cloud replaces this with `bash -c` that starts JupyterLab.
+# docker run with no arguments starts JupyterLab; flags go to strata-serve.
+set -eu
+if [ "$#" -eq 0 ]; then
+  exec jupyter lab --ip=0.0.0.0 --port="${NOTEBOOK_PORT:-8888}" --no-browser --allow-root
+fi
+case "$1" in
+  --*)            exec /usr/local/bin/strata-serve "$@" ;;
+  strata-serve)   shift; exec /usr/local/bin/strata-serve "$@" ;;
+  jupyter|python|python3|bash|sh) exec "$@" ;;
+esac
+exec "$@"

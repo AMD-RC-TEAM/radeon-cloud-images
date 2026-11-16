@@ -1,0 +1,82 @@
+# Niko1221/Strata#5829, reduced to the hunks that apply on v0.2.13
+# (d2f096475817d4666c364c820b0ca830f751cfc5). Generated with diff -Naur of
+# that tree against the #5829 branch (send-ready/strata-pr). The engine
+# FAST_ATTN gfx1100 default is already in v0.2.13; this patch keeps the
+# Linux DeepSeek picker on gfx1100 only (not gfx1101/1102).
+# Apply: patch -p1 -d <strata-src>
+diff -Naur a/packaging/build_dsv41_hip_linux.sh b/packaging/build_dsv41_hip_linux.sh
+--- a/packaging/build_dsv41_hip_linux.sh
++++ b/packaging/build_dsv41_hip_linux.sh
+@@ -3,7 +3,7 @@
+ # data for the listed archs, packaged as an engine component whose entry point is strata-dsv41.  The Qwen engine packages (build_hip_linux.sh) are not
+ # touched: DeepSeek ships as its own package per card family, the way the Qwen packages are split (rx9070 / rx7900 / rx6000 / halo).
+ #
+-#   VARIANT=rx7900     rx9070 (gfx1200 gfx1201) | rx7900 (gfx1100 gfx1101 gfx1102: built and run on 4 x W7900D) | a name + ARCHS=
++#   VARIANT=rx7900     rx9070 (gfx1200 gfx1201) | rx7900 (gfx1100: run on 4 x W7900D; gfx1101 gfx1102: built, not run) | a name + ARCHS=
+ #   ARCHS="gfx1100;gfx1101;gfx1102"   the code objects (default: the variant's); BUILD.json "archs" and the manifest list exactly these
+ #   SRC=<this checkout>  LLAMA=<llama.cpp checkout at the pinned commit>  HP=<ROCm devel root>  CORE=<ROCm core root>  LIBW=<ROCm libraries root>
+ #   OUT=<work folder>  PKGVER=0.1.59  COMMIT=<source commit for the build id>  JOBS=16
+@@ -27,7 +27,7 @@
+   rx7900) ARCHS=${ARCHS:-gfx1100;gfx1101;gfx1102} ;;
+   *)      ARCHS=${ARCHS:?ARCHS=gfx...} ;;
+ esac
+-NOTE_EXTRA=""; [ "$V" = rx7900 ] && NOTE_EXTRA=" (built and run on 4 x W7900D, gfx1100)"
++NOTE_EXTRA=""; [ "$V" = rx7900 ] && NOTE_EXTRA=" (gfx1100 run on 4 x W7900D; gfx1101/1102 built, not run)"
+ ARCHLIST=${ARCHS//;/ }
+ DATAARCH=${ARCHS//;/,}
+ mkdir -p "$OUT"; S=$OUT/build.status
+diff -Naur a/strata_control/dsv41_fit.py b/strata_control/dsv41_fit.py
+--- a/strata_control/dsv41_fit.py
++++ b/strata_control/dsv41_fit.py
+@@ -160,10 +160,11 @@
+ 
+ 
+ #: Official Linux feed is RDNA4 only (rx9070: gfx1200/gfx1201). Source VARIANT=rx7900 also
+-#: builds RDNA3 (gfx1100/1101/1102). Keep the families apart: _is_rdna4 must not see gfx1100
+-#: or W7900D would default to 5 experts.
++#: builds gfx1100/1101/1102; only gfx1100 was run (4 x W7900D). Keep the families apart:
++#: _is_rdna4 must not see gfx1100 or W7900D would default to 5 experts. gfx1101/1102 stay
++#: out of the default picker until measured; an installed package's `covered` list still wins.
+ DSV41_HIP_ARCHS_RDNA4 = ("gfx1200", "gfx1201")
+-DSV41_HIP_ARCHS_RDNA3 = ("gfx1100", "gfx1101", "gfx1102")
++DSV41_HIP_ARCHS_RDNA3 = ("gfx1100",)
+ DSV41_HIP_ARCHS = DSV41_HIP_ARCHS_RDNA3 + DSV41_HIP_ARCHS_RDNA4
+ 
+ 
+@@ -177,7 +178,7 @@
+     `strata launch --plan`, setup and the app share, so the plan says what the run does.
+     Every card that counts (gpu_fit.usable_cards: no integrated chip beside a card with memory of its own, no card under 8 GB).  AMD:
+     on Windows one card only (several AMD cards sharing a model is Linux-only, setup.py), and only cards the engine package holds code for
+-    (`covered`, default DSV41_HIP_ARCHS): a PC with an RX 9070 and an RX 7900 uses the RX 9070 and says why the other is left out.
++    (`covered`; without it, mixed RDNA3+RDNA4 keeps RDNA4 only, pure gfx1100 keeps DSV41_HIP_ARCHS, gfx1101/1102 stay out): a PC with an RX 9070 and an RX 7900 uses the RX 9070 and says why the other is left out.
+     `named`: the person named these cards: they are used as named (setup warns about one the package has no code for)."""
+     mine = gpu_fit.for_vendor(list(cards or []), vendor)[0] if vendor else list(cards or [])
+     keep, ignored = gpu_fit.usable_cards(mine)
+@@ -198,8 +199,9 @@
+         win = _on_windows() if windows is None else windows
+         # the list of architectures: the package's own (`covered`), else Linux source-build
+         # arches. Mixed RDNA3+RDNA4 without a covered list keeps RDNA4 only (official rx9070
+-        # feed). Pure RDNA3 is kept so a W7900D box is usable. Windows ships hip-rdna3, so
+-        # without a list of its own nothing is filtered there.
++        # feed). Pure gfx1100 is kept so a W7900D box is usable. gfx1101/1102 without a
++        # package list stay out. Windows ships hip-rdna3, so without a list of its own
++        # nothing is filtered there.
+         if covered is not None:
+             archs = tuple(covered)
+         elif win:
+diff -Naur a/tools/test_setup_amd_cards.py b/tools/test_setup_amd_cards.py
+--- a/tools/test_setup_amd_cards.py
++++ b/tools/test_setup_amd_cards.py
+@@ -75,6 +75,12 @@
+         self.assertTrue(dsv41_fit._is_rdna4(amd(0, "gfx1201")))
+         self.assertFalse(dsv41_fit.rdna4_faster([amd(i, "gfx1100", 48.0) for i in range(4)], "IST-DAS-2.00bpw", vendor="amd"))
+ 
++    def test_mixed_gfx1100_and_gfx1101_keeps_only_gfx1100(self):
++        keep, left = dsv41_fit.run_cards(
++            [amd(0, "gfx1100", 48.0), amd(1, "gfx1101", 16.0)], "amd", windows=False)
++        self.assertEqual(ids(keep), [0])
++        self.assertIn("gfx1101", left[0]["why_ignored"])
++
+     def test_windows_runs_on_one_card(self):
+         keep, left = dsv41_fit.run_cards([amd(0), amd(1)], "amd", windows=True)
+         self.assertEqual(ids(keep), [0])

@@ -1,0 +1,129 @@
+#!/usr/bin/env python3
+"""Serve a model from models.yaml the way `vllm serve <model>` does.
+
+    strata-serve --model <name> [extra strata launch flags]
+    strata-serve --list
+    strata-serve --plan --model <name>
+
+Weights are not in the image. The first start downloads them to /data/models and
+checks every sha256; later starts reuse files whose size and hash still match.
+Extra flags after --model override the gfx1100 preset. The server listens on
+port 8080 (OpenAI- and Anthropic-compatible APIs, GET /health).
+"""
+from __future__ import annotations
+
+import argparse, os, shutil, sys
+from pathlib import Path
+
+HERE = Path(__file__).resolve().parent
+sys.path.insert(0, "/opt/rc-strata")
+sys.path.insert(0, str(HERE))
+import rc_strata  # noqa: E402
+
+STRATA = os.environ.get("STRATA", "/opt/strata/terminal/bin/strata")
+ENTRYPOINT = os.environ.get("STRATA_ENTRYPOINT", "/opt/strata/entrypoint.sh")
+DSV41_EXE_FILE = Path("/etc/strata-dsv41-exe")
+EXTRA_ARGS = Path("/tmp/strata-launch-extra.args")
+
+
+def dsv41_exe() -> str | None:
+    if os.environ.get("STRATA_DSV41_EXE"):
+        return os.environ["STRATA_DSV41_EXE"]
+    if DSV41_EXE_FILE.is_file():
+        return DSV41_EXE_FILE.read_text().strip() or None
+    return shutil.which("strata-dsv41")
+
+
+def load():
+    return rc_strata.load_manifest()
+
+
+def print_list(manifest: dict) -> None:
+    print("name                          gpus   disk    family / model")
+    for name, spec in manifest["models"].items():
+        n = spec.get("needs") or {}
+        print(f"{name:<30}{n.get('gpus', '?'):<6}{str(n.get('disk_gb', '?')) + ' GB':<8}{spec['family']} / {spec['model']}")
+
+
+def build_env(name: str, spec: dict, folder: Path, extra: list[str]) -> dict[str, str]:
+    env = os.environ.copy()
+    env.update(rc_strata.env_for(spec))
+    gfx = spec.get("gfx1100") or {}
+    n = int((spec.get("needs") or {}).get("gpus") or 1)
+    exe = dsv41_exe()
+    if exe:
+        env["STRATA_DSV41_EXE"] = exe
+    env["FAMILY"] = spec["family"]
+    env["MODEL"] = spec["model"]
+    env["MODEL_PATH"] = str(folder)
+    env["PORT"] = env.get("PORT") or "8080"
+    env["VISION"] = str(gfx.get("vision") or "off")
+    if gfx.get("speed"):
+        env["SPEED"] = str(gfx["speed"])
+    env["GPUS"] = env.get("GPUS") or env.get("GPU") or ",".join(str(i) for i in range(n))
+    sets = [str(x) for x in (gfx.get("set") or [])]
+    if sets:
+        env["STRATA_SET"] = " ".join(sets)
+    env["STRATA_FEED_MODELS"] = "0"
+    env["ALLOW_DOWNLOAD"] = env.get("ALLOW_DOWNLOAD") or "1"
+    if extra:
+        EXTRA_ARGS.write_text("\n".join(extra) + "\n")
+        env["STRATA_LAUNCH_EXTRA"] = str(EXTRA_ARGS)
+    elif "STRATA_LAUNCH_EXTRA" in env:
+        del env["STRATA_LAUNCH_EXTRA"]
+    return env
+
+
+def cmd_for(name: str, spec: dict, extra: list[str], model_path: Path | None) -> list[str]:
+    return [STRATA, *rc_strata.launch_argv(name, spec, extra, model_path=model_path)]
+
+
+def main(argv: list[str] | None = None) -> int:
+    p = argparse.ArgumentParser(prog="strata-serve", description=__doc__,
+                                formatter_class=argparse.RawDescriptionHelpFormatter)
+    p.add_argument("--model", default=os.environ.get("STRATA_MODEL") or "",
+                   help="preset name in models.yaml (or STRATA_MODEL)")
+    p.add_argument("--list", action="store_true", help="list presets and exit")
+    p.add_argument("--plan", action="store_true", help="print the download and launch plan; do not start")
+    a, extra = p.parse_known_args(argv)
+    if extra and extra[0] == "--":
+        extra = extra[1:]
+
+    manifest = load()
+    if a.list:
+        print_list(manifest)
+        return 0
+    name = a.model.strip()
+    if not name:
+        print("usage: strata-serve --model <name>   (strata-serve --list)", file=sys.stderr)
+        print_list(manifest)
+        return 2
+    spec = manifest["models"].get(name)
+    if spec is None:
+        print(f"unknown model {name!r}. presets:", file=sys.stderr)
+        print_list(manifest)
+        return 2
+
+    dest = Path(spec.get("dest") or (rc_strata.MODELS_ROOT / name))
+    if a.plan:
+        print(f"model: {name}")
+        print(f"strata: --family {spec['family']} --model {spec['model']}")
+        print(f"dest: {dest}")
+        print("files:")
+        for e in spec["files"]:
+            mark = "ok" if rc_strata.file_ok(rc_strata.dest_path(name, e, dest), e) else "download"
+            print(f"  [{mark}] {e['bytes']} {e['sha256'][:12]} {e['repo']} {e['path']}")
+        argv = cmd_for(name, spec, extra, dest)
+        env = rc_strata.env_for(spec)
+        print("env:", " ".join(f"{k}={v}" for k, v in env.items()))
+        print("exec:", " ".join(argv))
+        return 0
+
+    folder = rc_strata.ensure_files(name, spec, dest)
+    env = build_env(name, spec, folder, extra)
+    print("strata-serve: starting", name, "via", ENTRYPOINT, flush=True)
+    os.execve(ENTRYPOINT, [ENTRYPOINT, "run"], env)
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
