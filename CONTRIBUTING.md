@@ -51,7 +51,7 @@ issue with a one-click "open PR" link.
    the flow above applies.
 
 ## Worked example
-A complete, commented example of a new image (Dockerfile, `image.yaml`, smoke, README, versions and catalog notes, and what not to do) is in the draft PR __EXAMPLE_PR__ (`images/example-hello/`). Copy from it; the PR is never merged.
+A complete, commented example of a new image (Dockerfile, `image.yaml`, smoke, README, versions and catalog notes, and what not to do) is in the draft PR [#29](https://github.com/AMD-RC-TEAM/radeon-cloud-images/pull/29) (`images/example-hello/`). Copy from it; the PR is never merged.
 
 ## Who approves
 `main` needs one Approve from a code owner (see README, "Branch protection and who approves") and green `validate`
