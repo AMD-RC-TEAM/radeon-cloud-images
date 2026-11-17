@@ -1,0 +1,8 @@
+# EXAMPLE ONLY (draft PR, never merged). Release settings for this image, read by tools/release.py and
+# tools/upstream_check.py.
+name: example-hello                       # = the directory name under images/
+rc_repo: rc/example-hello                 # Harbor alias repo; the catalog row tracks rc/example-hello:rc-current
+catalog_row: "Example · Hello"            # the stable picker row this image feeds (created by rc-ops/rc-ux after the first release)
+smoke: example-hello                      # runs images/example-hello/smoke.sh
+upstream:                                 # registry/repo come from the Dockerfile's FROM line
+  tag_regex: '^rocm7\.[0-9]+\.[0-9]+_ubuntu24\.04_py3\.12_pytorch_release_2\.[0-9]+\.[0-9]+$'   # tags the daily upgrade bot may propose
