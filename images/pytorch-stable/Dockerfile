@@ -9,10 +9,5 @@ ARG PIP_INDEX_URL
 COPY add_jupyterlab.sh /tmp/add_jupyterlab.sh
 RUN sh /tmp/add_jupyterlab.sh && rm -f /tmp/add_jupyterlab.sh
 
-# First-terminal tips (tools/welcome/, put into every build context as rc-welcome/): what this image is and how
-# to expose a web app with rc-tunnel. Printed once per home directory; `bash -c` and scripts stay silent.
-COPY rc-welcome/ /tmp/rc-welcome/
-RUN sh /tmp/rc-welcome/add_welcome.sh "Official ROCm PyTorch image, stable channel" && rm -rf /tmp/rc-welcome
-
 # JupyterLab terminals start "$SHELL -l" and fall back to sh when SHELL is unset (no history, no tab completion).
 ENV SHELL=/bin/bash

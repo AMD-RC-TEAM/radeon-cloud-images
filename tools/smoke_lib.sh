@@ -21,78 +21,9 @@ PY
   fi
 }
 
-# welcome_once: the first-shell tips print once in an interactive shell, never in `bash -c`, and not again.
-# Only our block (from "Radeon Cloud:" to "Hide this message") is checked; the image's own bashrc may print other lines.
-welcome_block() { sed -n '/^Radeon Cloud:/,/^Hide this message/p'; }
-welcome_once() {
-  local h first; h=$(mktemp -d)
-  [ -z "$(HOME=$h bash -c 'true' 2>&1 | welcome_block)" ] || { echo "FAIL: welcome printed in a non-interactive shell"; return 1; }
-  first=$(HOME=$h bash -i -c 'true' 2>/dev/null | welcome_block)
-  [ -n "$first" ] || { echo "FAIL: no welcome in the first interactive shell"; return 1; }
-  [ "$(printf '%s\n' "$first" | wc -l)" -le 8 ] || { echo "FAIL: welcome is longer than 8 lines"; return 1; }
-  [ -z "$(HOME=$h bash -i -c 'true' 2>/dev/null | welcome_block)" ] || { echo "FAIL: welcome printed twice"; return 1; }
-  echo "welcome: once in an interactive shell, silent otherwise"; printf '%s\n' "$first" | sed 's/^/  | /'
-}
-
-# welcome_jupyter_terminal: the tips also appear in a JupyterLab terminal. jupyter_server starts terminals as
-# "$SHELL -l" (or "sh -l" when SHELL is unset): a login shell, which reads /etc/profile.d/ (and, for bash, the
-# user's ~/.profile -> ~/.bashrc -> /etc/bash.bashrc path too). This opens a real terminal over the REST and websocket
-# API in a fresh home directory and checks the block is printed.
-welcome_jupyter_terminal() {
-  python3 - <<'PY'
-import asyncio, json, os, subprocess, tempfile, time, urllib.request
-from tornado.websocket import websocket_connect
-home, port, tok = tempfile.mkdtemp(), 18899, "rcsmoke"
-env = dict(os.environ, HOME=home)
-p = subprocess.Popen(["jupyter", "server", "--no-browser", f"--port={port}", f"--ServerApp.token={tok}", "--allow-root",
-                      f"--ServerApp.root_dir={home}"], env=env, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-base = f"http://127.0.0.1:{port}"
-try:
-    for _ in range(60):
-        try:
-            urllib.request.urlopen(f"{base}/api/status?token={tok}", timeout=2); break
-        except Exception:
-            time.sleep(1)
-    req = urllib.request.Request(f"{base}/api/terminals?token={tok}", data=b"{}", method="POST",
-                                 headers={"Content-Type": "application/json"})
-    name = json.load(urllib.request.urlopen(req, timeout=10))["name"]
-
-    def new_terminal():
-        req = urllib.request.Request(f"{base}/api/terminals?token={tok}", data=b"{}", method="POST",
-                                     headers={"Content-Type": "application/json"})
-        return json.load(urllib.request.urlopen(req, timeout=10))["name"]
-
-    async def read(name, until, send=None, wait=10):
-        ws = await websocket_connect(f"ws://127.0.0.1:{port}/terminals/websocket/{name}?token={tok}")
-        out, t0, sent = "", time.time(), False
-        while time.time() - t0 < wait and until not in out:
-            if send and not sent and time.time() - t0 > 3:
-                await ws.write_message(json.dumps(["stdin", send])); sent = True
-            try:
-                m = await asyncio.wait_for(ws.read_message(), timeout=2)
-            except asyncio.TimeoutError:
-                continue
-            if m is None:
-                break
-            msg = json.loads(m)
-            if msg[0] == "stdout":
-                out += msg[1]
-        ws.close()
-        return out
-
-    # The first terminal shows the tips, and its shell is bash (the image sets SHELL=/bin/bash; unset, it is sh).
-    # The marker is assembled by the shell, so the echoed command line itself never contains "RC-SHELL=".
-    probe = 'echo "RC-$(echo SHELL)=$(basename "$(readlink -f /proc/$$/exe)")"\r'
-    out = asyncio.run(read(name, "RC-SHELL=", send=probe, wait=15))
-    assert "Radeon Cloud:" in out and "rc-tunnel expose" in out, f"no tips in a JupyterLab terminal; got: {out[-300:]!r}"
-    assert "RC-SHELL=bash" in out, f"JupyterLab terminal is not bash; got: {out[-200:]!r}"
-    print("welcome: shown in a JupyterLab terminal; the terminal shell is bash")
-    # A second terminal in the same home does not repeat them.
-    out2 = asyncio.run(read(new_terminal(), "RC-SHELL=", send=probe, wait=15))
-    assert "RC-SHELL=" in out2, f"second JupyterLab terminal did not answer; got: {out2[-200:]!r}"
-    assert "Radeon Cloud:" not in out2, "welcome printed again in a second JupyterLab terminal"
-    print("welcome: not repeated in a second JupyterLab terminal")
-finally:
-    p.terminate()
-PY
+# no_in_image_welcome: the first-shell help comes from the platform (D-20261114-06), not from the image.
+no_in_image_welcome() {
+  [ ! -e /etc/profile.d/rc-welcome.sh ] || { echo "FAIL: image still ships /etc/profile.d/rc-welcome.sh"; return 1; }
+  ! grep -qs rc-welcome.sh /etc/bash.bashrc || { echo "FAIL: /etc/bash.bashrc still sources rc-welcome.sh"; return 1; }
+  echo "welcome: none baked into the image (platform-mounted, D-20261114-06)"
 }
