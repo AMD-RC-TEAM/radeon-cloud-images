@@ -27,3 +27,20 @@ no_in_image_welcome() {
   ! grep -qs rc-welcome.sh /etc/bash.bashrc || { echo "FAIL: /etc/bash.bashrc still sources rc-welcome.sh"; return 1; }
   echo "welcome: none baked into the image (platform-mounted, D-20261114-06)"
 }
+
+# openssh_baked: sshd ships in the image, so Radeon Cloud's SSH setup skips its launch-time apt install
+# (app/ssh_runtime.py checks `command -v sshd` / /usr/sbin/sshd first). No host keys may be baked in: the platform
+# generates them per instance. The config test uses a throwaway host key, the way the platform starts sshd.
+openssh_baked() {
+  sshd_bin=$(command -v sshd 2>/dev/null || true); [ -n "$sshd_bin" ] || sshd_bin=/usr/sbin/sshd
+  [ -x "$sshd_bin" ] || { echo "FAIL: no sshd in the image; SSH setup would apt-install openssh-server at launch"; return 1; }
+  if ls /etc/ssh/ssh_host_*key >/dev/null 2>&1; then echo "FAIL: SSH host keys are baked into the image"; return 1; fi
+  command -v ssh-keygen >/dev/null 2>&1 || { echo "FAIL: ssh-keygen missing (needed for per-instance host keys)"; return 1; }
+  t=$(mktemp -d)
+  ssh-keygen -q -t ed25519 -N '' -f "$t/hostkey" >/dev/null
+  printf 'Port 2222\nHostKey %s/hostkey\nPidFile %s/sshd.pid\nUsePAM no\nPasswordAuthentication no\n' "$t" "$t" > "$t/sshd_config"
+  mkdir -p /run/sshd 2>/dev/null || true
+  "$sshd_bin" -t -f "$t/sshd_config" || { rm -rf "$t"; echo "FAIL: sshd rejects a minimal config"; return 1; }
+  rm -rf "$t"
+  echo "openssh: $("$sshd_bin" -V 2>&1 | head -1 || true) present, no baked host keys; launch-time install is skipped"
+}
