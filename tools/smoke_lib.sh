@@ -42,5 +42,5 @@ openssh_baked() {
   mkdir -p /run/sshd 2>/dev/null || true
   "$sshd_bin" -t -f "$t/sshd_config" || { rm -rf "$t"; echo "FAIL: sshd rejects a minimal config"; return 1; }
   rm -rf "$t"
-  echo "openssh: $("$sshd_bin" -V 2>&1 | head -1 || true) present, no baked host keys; launch-time install is skipped"
+  echo "openssh: $(ssh -V 2>&1 | head -1 || true) present, no baked host keys; launch-time install is skipped"
 }
