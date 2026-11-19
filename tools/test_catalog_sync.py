@@ -96,6 +96,19 @@ class MoveFirstThenCover(Base):
         self.assertEqual(admin.images[238]["image"], OLD, "stable row must not move")
         self.assertEqual(len(admin.images), 2, "no row created")
 
+    def test_template_enabled_before_the_move_refuses(self):
+        tpl = {"id": 5810, "image": OLD, "enabled": False}
+        admin = FakeAdmin([self.stable, self.prev], [tpl], {REPO + ":rc-current": NEW, REPO + ":rc-prev": PREV})
+        orig = admin.call
+        def call(method, path, body=None):
+            if method == "POST" and path.endswith("/harbor") and "/238/" in path:
+                tpl["enabled"] = True      # the owner enables it after sync_site read the template list
+            return orig(method, path, body)
+        admin.call = call
+        rc = self.run_sync(admin)
+        self.assertEqual(rc, 1)
+        self.assertEqual(admin.images[238]["image"], OLD, "stable row must not move once a pinning template is enabled")
+
     def test_previous_row_takes_the_freed_digest(self):
         # rc-prev resolves to OLD (the base case on China): after the move the previous row adopts OLD; no pinned row
         admin = FakeAdmin([self.stable, self.prev], [{"id": 5810, "image": OLD, "enabled": False}],

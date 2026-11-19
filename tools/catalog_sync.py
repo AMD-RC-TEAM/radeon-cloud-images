@@ -208,6 +208,20 @@ def ensure_pinned_row(s, site, cat, stable_row, digest_ref):
     return row
 
 
+def _still_disabled_only(s, site, cat, digest_ref):
+    """Re-read the templates right before a move-first adopt (rc-release review of #39): the list read at the start of
+    the run is older than the probe and the previous-row step, and a template may have been enabled since."""
+    st, fresh = s.call("GET", "/api/admin/templates")
+    if st != 200:
+        print(f"[{site}] {cat}: REFUSED, could not re-read templates before the move ({st})"); return False
+    fresh = fresh.get("templates", fresh) if isinstance(fresh, dict) else fresh
+    en = [t.get("id") for t in fresh if str(t.get("image") or t.get("image_id") or "") == digest_ref and t.get("enabled") is not False]
+    if en:
+        print(f"[{site}] {cat}: REFUSED, template(s) {en[:10]} pinning {digest_ref.split('@', 1)[-1][:19]} are enabled now")
+        return False
+    return True
+
+
 def rows_of(payload):
     return payload.get("images", payload) if isinstance(payload, dict) else payload
 
@@ -341,8 +355,12 @@ def sync_site(site, rows, dry):
             want = want.split("@", 1)[1] if "@" in want else want   # Admin reports <repo>@sha256:...; GT_PASSED keeps the bare digest
             if passed.get(cat, {}).get("digest") != want:
                 print(f"[{site}] {cat}: drift to {want[:19]} held until the GT launch check passes for it"); continue
+            if cover_after and not _still_disabled_only(s, site, cat, cover_after):
+                rc = 1; continue
             status, new = _adopt(s, site, cat, rid)
         else:
+            if cover_after and not _still_disabled_only(s, site, cat, cover_after):
+                rc = 1; continue
             status, new = _adopt(s, site, cat, rid)
         if status == "error":
             print(f"[{site}] {cat}: {new}"); rc = 1; continue
