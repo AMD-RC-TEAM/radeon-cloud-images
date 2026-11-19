@@ -40,7 +40,7 @@ COPY requirements.txt torch-wheels.txt fetch.py /tmp/rc/
 
 # 2. uv and the Python 3.11.14 build that RLinf's installer uses (python-build-standalone 20260211, as uv 0.13.7
 #    installs it), then the Lingbot-VLA environment with every package at the validated version (--no-deps).
-#    The interpreter is downloaded and checked here (with retries and a GitHub fallback), then installed by uv from
+#    The interpreter is downloaded and checked here (npmmirror first, then astral and GitHub, with retries), then installed by uv from
 #    that local copy, so it is byte-for-byte what uv installs.
 # The build sets PIP_INDEX_URL to a PyPI mirror reachable from the build cluster; it is not kept in the image.
 ARG PIP_INDEX_URL=https://mirrors.aliyun.com/pypi/simple/
@@ -53,6 +53,7 @@ ARG PBS_URL=cpython-3.11.14%2B20260211-x86_64-unknown-linux-gnu-install_only_str
 RUN python3 -m pip install --no-cache-dir --index-url "${PIP_INDEX_URL}" uv==0.13.7 && \
     mkdir -p /tmp/rc/pbs/20260211 && \
     python3 /tmp/rc/fetch.py file 1fb6a89daa750f7eff00eb65d901c3c236713812eb9c8c7e07ecdfcd78203c8e "/tmp/rc/pbs/20260211/${PBS}" \
+        "https://registry.npmmirror.com/-/binary/python-build-standalone/20260211/${PBS_URL}" \
         "https://releases.astral.sh/github/python-build-standalone/releases/download/20260211/${PBS_URL}" \
         "https://github.com/astral-sh/python-build-standalone/releases/download/20260211/${PBS_URL}" && \
     UV_PYTHON_INSTALL_MIRROR=file:///tmp/rc/pbs uv python install 3.11.14 --no-bin && rm -rf /tmp/rc/pbs && \
@@ -89,9 +90,9 @@ ARG LEROBOT_COMMIT=0cf864870cf29f4738d3ade893e6fd13fbd7cdb5
 ARG LINGBOT_VLA_COMMIT=a57f084679bccf976d90b2fe8b9a2372c81d86c2
 ARG LINGBOT_DEPTH_COMMIT=64f964fbce4746bccd251b7ed5a10efa922b6675
 ARG MOGE_COMMIT=07444410f1e33f402353b99d6ccd26bd31e469e8
-# GitHub Releases downloads go through this proxy first (the one Radeon Cloud's own first-shell help suggests), then
-# directly to github.com; the file is checked by sha256 either way. Set it empty to use github.com only.
-ARG GITHUB_PROXY=https://gh-proxy.org/
+# GitHub Releases downloads go through this proxy first (gh-proxy.org stopped answering from the build cluster on
+# 2026-11-19, and GitHub release assets time out there), then directly to github.com; the file is checked by sha256 either way. Set it empty to use github.com only.
+ARG GITHUB_PROXY=https://gh-proxy.com/
 ARG FLASH_ATTN_WHEEL=flash_attn-2.8.3+rocm7.2torch2.11cxx11abiTRUE-cp311-cp311-linux_x86_64.whl
 ARG FLASH_ATTN_WHEEL_URL=https://github.com/RLinf/flash-attention/releases/download/v2.8.3/flash_attn-2.8.3%2Brocm7.2torch2.11cxx11abiTRUE-cp311-cp311-linux_x86_64.whl
 RUN V=/opt/venv/lingbotvla && L=$V/lingbot-vla && M=$L/lingbotvla/models/vla/vision_models && \
