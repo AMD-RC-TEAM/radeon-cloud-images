@@ -12,7 +12,7 @@ port 8080 (OpenAI- and Anthropic-compatible APIs, GET /health).
 """
 from __future__ import annotations
 
-import argparse, os, shutil, sys
+import argparse, os, resource, shutil, sys
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
@@ -121,6 +121,11 @@ def main(argv: list[str] | None = None) -> int:
 
     folder = rc_strata.ensure_files(name, spec, dest)
     env = build_env(name, spec, folder, extra)
+    env.setdefault("HSA_DISABLE_COREDUMP_ON_EXCEPTION", "1")
+    try:
+        resource.setrlimit(resource.RLIMIT_CORE, (0, 0))
+    except (ValueError, OSError):
+        pass
     print("strata-serve: starting", name, "via", ENTRYPOINT, flush=True)
     os.execve(ENTRYPOINT, [ENTRYPOINT, "run"], env)
 

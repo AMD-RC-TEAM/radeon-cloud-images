@@ -80,6 +80,22 @@ def load_manifest(path: Path | None = None) -> dict:
     data = _promote_lists(path, path.read_text(encoding="utf-8").splitlines(), {})
     if "models" not in data:
         raise SystemExit(f"{path} has no models:")
+    models = data["models"]
+    for name, spec in models.items():
+        src = spec.get("files_from")
+        if not src:
+            continue
+        if src not in models:
+            raise SystemExit(f"{path}: {name}: files_from {src!r} is not a model")
+        if src == name:
+            raise SystemExit(f"{path}: {name}: files_from cannot point at itself")
+        if spec.get("files"):
+            continue
+        parent = models[src]
+        if not parent.get("files"):
+            raise SystemExit(f"{path}: {name}: files_from {src!r} has no files")
+        spec["files"] = parent["files"]
+        spec.setdefault("dest", parent.get("dest"))
     return data
 
 

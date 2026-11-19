@@ -1,6 +1,7 @@
 # Strata for Radeon PRO W7900 / W7900D (gfx1100): one image, `strata-serve --model <name>`.
-# DeepSeek engine is compiled here for gfx1100 only (no GPU at build). The runtime is the public
-# upstream gfx110x image (Terminal + signed Qwen rx7900 engine). Weights are not in the image.
+# DeepSeek is a permanent fork pinned at v0.2.13 (upstream dropped it from 0.2.14). The engine is
+# compiled here for gfx1100 only (no GPU at build). The runtime is the public upstream gfx110x
+# image (Terminal + signed Qwen rx7900 engine). Weights are not in the image.
 #
 # The DeepSeek build FROM is docker.io (already used by SGLang). The runtime FROM is ghcr.io;
 # Docker Hub is mirrored automatically, ghcr.io needs rc-ops to copy the digest first.
@@ -11,6 +12,9 @@ ARG STRATA_COMMIT=d2f096475817d4666c364c820b0ca830f751cfc5
 ARG STRATA_SHA256=7093283d24ad4f9bc9a379607340678261c60e4539919c763c7555b1b5669195
 ARG LLAMA_COMMIT=3cf03257f219afbe7334045ff7c6a06ac68c627d
 ARG LLAMA_SHA256=c076d7534afa0e5d0ec2a0d425b11e791c16f3de0d727221aea071cef156a280
+# In-tree pr-5829.patch is the v0.2.13-applicable hunks of Niko1221/Strata#5829 at this head.
+# The patch is COPY'd, not fetched by SHA at build time.
+ARG PR5829_SHA=b17a82a5d7
 
 COPY fetch_src.py pr-5829.patch build_dsv41.sh check_manifest.py rc_strata.py models.yaml /tmp/rc/
 RUN python3 /tmp/rc/fetch_src.py tar Niko1221/Strata ${STRATA_COMMIT} ${STRATA_SHA256} /src/strata \
@@ -30,7 +34,7 @@ ARG PIP_INDEX_URL
 
 COPY --from=dsv41-build /out/components/dsv41/ /opt/strata/components/dsv41/
 COPY --from=dsv41-build /out/dsv41_fit.py /out/rocminfo /tmp/rc-dsv41/
-COPY models.yaml rc_strata.py strata-serve check_manifest.py README.md rc-strata-entry patch_entrypoint.py /tmp/rc/
+COPY models.yaml rc_strata.py strata-serve check_manifest.py README.md patch_entrypoint.py /tmp/rc/
 RUN set -e \
  && exe=$(find /opt/strata/components/dsv41 -type f -name strata-dsv41 | head -n1) \
  && test -n "$exe" && test -x "$exe" \
@@ -38,9 +42,8 @@ RUN set -e \
  && install -d /opt/rc-strata \
  && install -m 644 /tmp/rc/models.yaml /tmp/rc/rc_strata.py /tmp/rc/README.md /opt/rc-strata/ \
  && install -m 755 /tmp/rc/strata-serve /tmp/rc/check_manifest.py /usr/local/bin/ \
- && install -m 755 /tmp/rc/rc-strata-entry /usr/local/bin/rc-strata-entry \
  && ln -sf /usr/local/bin/strata-serve /opt/rc-strata/strata-serve \
- && printf '0.2.13-m1\n' > /opt/rc-strata/VERSION \
+ && printf '0.2.13\n' > /opt/rc-strata/VERSION \
  && /opt/strata/terminal/python/bin/python3 /tmp/rc/patch_entrypoint.py /opt/strata/entrypoint.sh \
  && fit=$(find /opt/strata/terminal -name dsv41_fit.py | head -n1) \
  && test -n "$fit" \
@@ -67,13 +70,22 @@ RUN sh /tmp/add_jupyterlab.sh && rm -f /tmp/add_jupyterlab.sh
 COPY rc-welcome/ /tmp/rc-welcome/
 RUN sh /tmp/rc-welcome/add_welcome.sh "Strata on RDNA3 (gfx1100): strata-serve --model <name>" "/opt/rc-strata/README.md" "Strata API: strata-serve --model <name> then rc-tunnel expose --port 8080" && rm -rf /tmp/rc-welcome
 
+# HSA_USERPTR_FOR_PAGED_MEM=0: avoid paged-memory queue stalls on gfx1100 (this image is ROCm 7.2.4).
+# GPU_PINNED_MIN_XFER_SIZE=1048576: HIP pinned-transfer floor used with mmap-experts.
+# HSA_DISABLE_COREDUMP_ON_EXCEPTION=1 plus ulimit -c 0 in strata-serve: no core dumps.
+# With ROCm >= 10.2 also set HSA_SVM_FOR_PAGED_MEM=0; this image is 7.2.4, so it is not set.
 ENV STRATA_FEED_MODELS=0 \
     STRATA_MODELS_YAML=/opt/rc-strata/models.yaml \
     STRATA_MODELS_ROOT=/data/models \
     STRATA_DATA_DIR=/data/Strata-data \
     PORT=8080 \
     SHELL=/bin/bash \
-    HSA_USERPTR_FOR_PAGED_MEM=0
+    HSA_USERPTR_FOR_PAGED_MEM=0 \
+    GPU_PINNED_MIN_XFER_SIZE=1048576 \
+    HSA_DISABLE_COREDUMP_ON_EXCEPTION=1
 
 EXPOSE 8080
-ENTRYPOINT ["/usr/bin/tini", "--", "/usr/local/bin/rc-strata-entry"]
+# Same as the upstream gfx110x image. Radeon Cloud replaces the command with JupyterLab (`jupyter` is on PATH).
+# docker run … <image> strata-serve --model <name>  (extra args replace CMD; the entrypoint execs them)
+ENTRYPOINT ["/usr/bin/tini", "--", "/opt/strata/entrypoint.sh"]
+CMD ["run"]

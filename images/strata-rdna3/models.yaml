@@ -2,7 +2,7 @@
 # Strata v0.2.13 setup.py (HF_REVISIONS / REPO_PINS). Do not edit hashes by hand;
 # check_manifest.py compares this file to that setup.py at image build.
 schema: 1
-revision: 1
+revision: 2
 strata:
   version: "0.2.13"
   commit: d2f096475817d4666c364c820b0ca830f751cfc5
@@ -14,10 +14,13 @@ models:
     dest: /data/models/deepseek-v4.1-flash-2.25
     needs: {gpus: 4, disk_gb: 274}
     gfx1100:
-      speed: faster
+      # full = --experts 6 (default). prefill-chunk=1024 is a separate measured optimization, not the 5-expert speedup.
+      # GPU_PINNED_MIN_XFER_SIZE / HSA_DISABLE_COREDUMP_ON_EXCEPTION: also in the image ENV.
+      # With ROCm >= 10.2 also set HSA_SVM_FOR_PAGED_MEM=0; this image is 7.2.4, so it is not set.
+      speed: full
       set: [prefill-chunk=1024]
       vision: off
-      env: {HSA_USERPTR_FOR_PAGED_MEM: "0", DS4_FAST_ATTN: "1"}
+      env: {HSA_USERPTR_FOR_PAGED_MEM: "0", GPU_PINNED_MIN_XFER_SIZE: "1048576", HSA_DISABLE_COREDUMP_ON_EXCEPTION: "1", DS4_FAST_ATTN: "1"}
     files:
       - repo: ISTA-DASLab/DeepSeek-V4.1-Flash-1017-GSQ-RCO-GGUF
         revision: cb02422c900df489cea5833e8a92171224059b3c
@@ -54,6 +57,19 @@ models:
         path: dspark-DeepSeek-V4.1-Flash-1017-Q8_0.gguf
         bytes: 7976914240
         sha256: 6ba6ac1b331c540691a209e7fc97dec2a24e295acb1e755c84c7d24a4373927a
+  deepseek-v4.1-flash-2.25-fast:
+    family: deepseek41
+    model: IST-DAS-2.25bpw
+    engine: strata-dsv41
+    dest: /data/models/deepseek-v4.1-flash-2.25
+    needs: {gpus: 4, disk_gb: 274}
+    files_from: deepseek-v4.1-flash-2.25
+    gfx1100:
+      # Named fast preset: --speed faster (5 experts) until a quality check exists.
+      speed: faster
+      set: [prefill-chunk=1024]
+      vision: off
+      env: {HSA_USERPTR_FOR_PAGED_MEM: "0", GPU_PINNED_MIN_XFER_SIZE: "1048576", HSA_DISABLE_COREDUMP_ON_EXCEPTION: "1", DS4_FAST_ATTN: "1"}
   deepseek-v4.1-flash-2.00:
     family: deepseek41
     model: IST-DAS-2.00bpw
@@ -61,10 +77,10 @@ models:
     dest: /data/models/deepseek-v4.1-flash-2.00
     needs: {gpus: 4, disk_gb: 257}
     gfx1100:
-      speed: faster
+      speed: full
       set: [prefill-chunk=1024]
       vision: off
-      env: {HSA_USERPTR_FOR_PAGED_MEM: "0", DS4_FAST_ATTN: "1"}
+      env: {HSA_USERPTR_FOR_PAGED_MEM: "0", GPU_PINNED_MIN_XFER_SIZE: "1048576", HSA_DISABLE_COREDUMP_ON_EXCEPTION: "1", DS4_FAST_ATTN: "1"}
     files:
       - repo: ISTA-DASLab/DeepSeek-V4.1-Flash-1017-GSQ-RCO-GGUF
         revision: cb02422c900df489cea5833e8a92171224059b3c
@@ -101,6 +117,18 @@ models:
         path: dspark-DeepSeek-V4.1-Flash-1017-Q8_0.gguf
         bytes: 7976914240
         sha256: 6ba6ac1b331c540691a209e7fc97dec2a24e295acb1e755c84c7d24a4373927a
+  deepseek-v4.1-flash-2.00-fast:
+    family: deepseek41
+    model: IST-DAS-2.00bpw
+    engine: strata-dsv41
+    dest: /data/models/deepseek-v4.1-flash-2.00
+    needs: {gpus: 4, disk_gb: 257}
+    files_from: deepseek-v4.1-flash-2.00
+    gfx1100:
+      speed: faster
+      set: [prefill-chunk=1024]
+      vision: off
+      env: {HSA_USERPTR_FOR_PAGED_MEM: "0", GPU_PINNED_MIN_XFER_SIZE: "1048576", HSA_DISABLE_COREDUMP_ON_EXCEPTION: "1", DS4_FAST_ATTN: "1"}
   qwen3.8-flash-next-iq3_s:
     family: qwen
     model: IQ3_S

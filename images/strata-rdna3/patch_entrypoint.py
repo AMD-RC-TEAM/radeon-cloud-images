@@ -1,5 +1,10 @@
 #!/usr/bin/env python3
-"""Teach the upstream docker/entrypoint.sh SPEED and STRATA_LAUNCH_EXTRA (build-time only)."""
+"""Teach the upstream docker/entrypoint.sh SPEED and STRATA_LAUNCH_EXTRA (build-time only).
+
+This is not image-argument dispatch. Docker ENTRYPOINT stays the upstream
+`tini -- /opt/strata/entrypoint.sh` (CMD run). strata-serve sets SPEED and
+STRATA_LAUNCH_EXTRA, then execs that script with `run`.
+"""
 from pathlib import Path
 import sys
 

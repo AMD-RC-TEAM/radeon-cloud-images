@@ -1,8 +1,9 @@
-# Niko1221/Strata#5829, reduced to the hunks that apply on v0.2.13
+# Niko1221/Strata#5829 head b17a82a5d7, reduced to the hunks that apply on v0.2.13
 # (d2f096475817d4666c364c820b0ca830f751cfc5). Generated with diff -Naur of
-# that tree against the #5829 branch (send-ready/strata-pr). The engine
-# FAST_ATTN gfx1100 default is already in v0.2.13; this patch keeps the
-# Linux DeepSeek picker on gfx1100 only (not gfx1101/1102).
+# that tree against the #5829 branch (send-ready/strata-pr at b17a82a5d7). The
+# engine FAST_ATTN gfx1100 default is already in v0.2.13; this patch keeps the
+# Linux DeepSeek picker on gfx1100 only (not gfx1101/1102). Kept in this image
+# dir: DeepSeek is a permanent 0.2.13 fork (#5829 will likely never merge).
 # Apply: patch -p1 -d <strata-src>
 diff -Naur a/packaging/build_dsv41_hip_linux.sh b/packaging/build_dsv41_hip_linux.sh
 --- a/packaging/build_dsv41_hip_linux.sh
