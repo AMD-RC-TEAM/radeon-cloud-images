@@ -1,5 +1,6 @@
-# Python packages of /opt/venv/lingbotvla, exactly as in the validated workshop image (uv pip freeze), installed with --no-deps.
-# torch/torchvision (+rocm7.2) come from the PyTorch ROCm index; flash-attn, lerobot and the Lingbot-VLA sources are installed separately (see the Dockerfile).
+# Python packages of /opt/venv/lingbotvla, exactly as in the validated workshop image (uv pip freeze), installed with --no-deps
+# from PIP_INDEX_URL. The PyTorch ROCm wheels (torch, torchvision and the three packages that provide the triton module)
+# are in torch-wheels.txt; flash-attn, LeRobot and the Lingbot-VLA sources are installed separately (see the Dockerfile).
 absl-py==2.5.1
 accelerate==1.15.0
 aiohappyeyeballs==2.7.1
@@ -243,7 +244,6 @@ python-discovery==1.9.5
 python-dotenv==1.2.4
 python-json-logger==4.2.0
 python-xlib==0.33
-pytorch-triton-rocm==3.5.1
 pyu2f==0.1.5
 pyyaml==6.0.3
 pyyaml-include==1.4.1
@@ -293,18 +293,14 @@ tinycss2==1.5.1
 tokenizers==0.21.4
 toml==0.10.2
 toppra==0.6.11
-torch==2.11.0+rocm7.2
 torchcodec==0.11.1
 torchdata==0.11.0
-torchvision==0.26.0+rocm7.2
 tornado==6.6.1
 tqdm==4.70.1
 traitlets==5.16.1
 transformers==4.51.3
 transforms3d==0.4.2
 trimesh==5.2.0
-triton==3.5.1
-triton-rocm==3.6.0
 truststore==0.10.5
 typing-extensions==4.16.0
 typing-inspect==0.9.0

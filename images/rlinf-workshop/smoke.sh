@@ -1,8 +1,9 @@
 #!/bin/bash
 # Smoke for rlinf-workshop on ONE W7900D (gfx1100), within the smoke Job's limits (8 CPUs, 48 GiB, default /dev/shm).
 # The workshop itself trains Lingbot-VLA with GRPO on 4 GPUs; this checks the parts it is built from: the JupyterLab
-# launch fast path, PyTorch on the GPU, RLinf and RoboTwin importing, and two RoboTwin place_shoe environments
-# rendering and stepping in SAPIEN (Vulkan) as RLinf's env workers run them. No model is downloaded.
+# launch fast path, PyTorch and Triton on the GPU, RLinf and RoboTwin importing, and, when the workshop's data volume
+# is mounted at /models/rlinf-workshop, two RoboTwin place_shoe environments rendering and stepping in SAPIEN (Vulkan)
+# as RLinf's env workers run them. Nothing is downloaded.
 set -euo pipefail
 . "$(dirname "$0")/smoke_lib.sh"
 
@@ -22,6 +23,10 @@ b = a @ a
 torch.cuda.synchronize()
 assert torch.isfinite(b).all(), "non-finite matmul result"
 print("torch", torch.__version__, "hip", torch.version.hip, "arch", arch)
+import os, triton
+assert triton.__version__ == "3.5.1", triton.__version__
+assert os.environ.get("AMD_VULKAN_ICD") == "RADV" and os.environ.get("FLASH_ATTENTION_TRITON_AMD_ENABLE") == "TRUE"
+print("triton", triton.__version__, "| RADV and the flash-attention Triton AMD backend are set for every process")
 PY
 
 # 3. RLinf and RoboTwin: build the workshop's place_shoe training environment from RLinf's own config (2 envs),
@@ -30,9 +35,16 @@ PY
 #    lines (the OptiX denoiser is CUDA-only and unused), and "missing pytorch3d" with a curobo ImportError traceback
 #    (RoboTwin then uses the mplib planner, which the workshop config selects).
 echo "== RLinf + RoboTwin place_shoe"
+for d in background_texture objects embodiments; do
+    test "$(readlink /opt/robotwin/assets/$d)" = /models/rlinf-workshop/robotwin-assets/$d
+done
 export REPO_PATH=/opt/RLinf EMBODIED_PATH=/opt/RLinf/examples/embodiment ROBOTWIN_PATH=/opt/robotwin ROBOT_PLATFORM=ALOHA
 export LINGBOT_VLA_PATH=/opt/venv/lingbotvla/lingbot-vla PYTHONPATH=/opt/RLinf:/opt/robotwin PYTHONWARNINGS=ignore
 cd /opt/RLinf
+python -c "from rlinf.envs.sim.robotwin.robotwin_env import RoboTwinEnv; print('RLinf and its RoboTwin environment import')"
+if [ ! -d /models/rlinf-workshop/robotwin-assets/objects ]; then
+    echo "The data volume is not mounted at /models/rlinf-workshop: RoboTwin environment check skipped"
+else
 timeout 1200 python - <<'PY'
 import time
 import numpy as np
@@ -63,6 +75,7 @@ assert torch.isfinite(torch.as_tensor(reward)).all(), "non-finite reward"
 print(f"step (5 actions): {time.time() - t0:.0f} s, reward {torch.as_tensor(reward).tolist()}")
 env.venv.close() if hasattr(env.venv, "close") else None
 PY
+fi
 
 # 4. The notebook server starts and answers.
 echo "== notebook"

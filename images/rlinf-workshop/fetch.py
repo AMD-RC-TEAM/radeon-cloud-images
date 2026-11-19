@@ -6,7 +6,7 @@
 Files are written to disk (the RoboTwin assets are several GB each) and verified before they are kept. Files of
 64 MB or more are fetched as 32 MB byte ranges over 8 parallel connections when the server supports ranges (Hugging
 Face's CDN limits each connection to ~5 MB/s; 8 connections measured ~39 MB/s), each range with its own retries;
-otherwise as one stream. A stalled connection fails after 2 minutes; with several URLs each gets fewer attempts, so a
+otherwise as one stream. A stalled connection fails after 2 minutes, a trickling range after 10; with several URLs each gets fewer attempts, so a
 dead one does not use up the build.
 """
 import concurrent.futures, hashlib, os, re, shutil, sys, tarfile, time, urllib.request
@@ -14,6 +14,7 @@ import concurrent.futures, hashlib, os, re, shutil, sys, tarfile, time, urllib.r
 UA = {"User-Agent": "rlinf-workshop-image-build/1.0"}  # some CDNs (releases.astral.sh) refuse Python's default one
 TIMEOUT = 120
 PARALLEL_MIN, PART, CONNECTIONS = 64 * 2**20, 32 * 2**20, 8
+PART_DEADLINE = 600  # a range still unfinished after 10 minutes is being trickled (CDN throttling): retry it
 
 
 def download(url, out, attempts=6):
@@ -54,9 +55,11 @@ def download_ranges(url, out, size, attempts=4):
                 req = urllib.request.Request(url, headers={**UA, "Range": f"bytes={start}-{end}"})
                 with urllib.request.urlopen(req, timeout=TIMEOUT) as r:
                     assert r.status == 206, f"HTTP {r.status} for a range request"
-                    pos = start
+                    pos, t_part = start, time.time()
                     while pos <= end:
-                        block = r.read(min(8 * 2**20, end - pos + 1))
+                        if time.time() - t_part > PART_DEADLINE:
+                            raise TimeoutError(f"only {pos - start} bytes in {PART_DEADLINE} s")
+                        block = r.read(min(2**20, end - pos + 1))
                         if not block:
                             raise IOError(f"range {start}-{end} ended at {pos}")
                         os.pwrite(fd, block, pos)
