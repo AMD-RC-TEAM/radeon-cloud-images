@@ -186,6 +186,28 @@ def ensure_previous_row(s, site, cat, stable_row, images):
     return row_of(res) or None
 
 
+def ensure_pinned_row(s, site, cat, stable_row, digest_ref):
+    """Hidden '<name> (pinned <digest>)' row that carries one old digest pinned by disabled templates (a2 11-19, see
+    the "move first, then cover" rule in sync_site). Created with POST only; returns the row read back, or None."""
+    st, fresh = s.call("GET", "/api/admin/images")
+    for r in rows_of(fresh) if st == 200 else []:
+        if str(r.get("image") or "") == digest_ref and r.get("enabled") is not False:
+            return r
+    short = digest_ref.split("@sha256:", 1)[-1][:12]
+    body = {"name": f"{stable_row.get('name')} (pinned {short})", "source_ref": digest_ref,
+            "description": f"Old {stable_row.get('name')} digest kept for templates that pin it (not in the picker)",
+            "enabled": True, "picker_visible": False, "preheat": False}
+    st, res = s.call("POST", "/api/admin/images", body)
+    if st not in (200, 201):
+        print(f"[{site}] {cat}: could not create pinned row for {short}: {st} {str(res)[:300]}")
+        return None
+    st, fresh = s.call("GET", "/api/admin/images")
+    row = next((r for r in rows_of(fresh) if str(r.get("image") or "") == digest_ref and r.get("enabled") is not False), None) \
+        if st == 200 else None
+    print(f"[{site}] {cat}: created hidden pinned row '{body['name']}'" + ("" if row else " but it does not read back as an enabled row carrying the digest"))
+    return row
+
+
 def rows_of(payload):
     return payload.get("images", payload) if isinstance(payload, dict) else payload
 
@@ -254,6 +276,7 @@ def sync_site(site, rows, dry):
         if not row:
             print(f"[{site}] {cat}: row {rid} not found"); rc = 1; continue
         used = templates_on(row, tpls)
+        cover_after = None
         if used:
             # D-39: a template that references the stable row itself (id, production-<id>, name, source_ref) blocks the
             # move. A template that only pins the row's current DIGEST keeps launching that digest as long as another
@@ -268,19 +291,38 @@ def sync_site(site, rows, dry):
                                     and str(r.get("image") or "") == cur_img]
             cov = covered(images)
             if not cov and dry:
-                print(f"[{site}] {cat}: templates {used[:10]} pin digest {digest_of(row)[:19]}; would make the (previous) row carry it first (dry run)"); continue
+                pin_en = [t.get("id") for t in tpls if str(t.get("image") or t.get("image_id") or "") == cur_img and t.get("enabled") is not False]
+                print(f"[{site}] {cat}: templates {used[:10]} pin digest {digest_of(row)[:19]}; would make the (previous) row carry it "
+                      f"first; if that cannot cover it: " + (f"REFUSE (enabled templates {pin_en[:10]})" if pin_en else
+                      "move the stable row first, then create a hidden pinned row (all pinning templates disabled)") + " (dry run)"); continue
             if not cov:
                 prev = ensure_previous_row(s, site, cat, row, images)
                 if prev:
                     pst, pnew = _adopt(s, site, cat + " (previous)", prev.get("id"))
-                    print(f"[{site}] {cat}: previous row {prev.get('id')} before moving the stable row: {pst} {pnew[:19]}")
+                    print(f"[{site}] {cat}: previous row {prev.get('id')} before moving the stable row: {pst} {pnew if pst == 'error' else pnew[:19]}")
                 st2, fresh = s.call("GET", "/api/admin/images")
                 if st2 == 200:
                     images = rows_of(fresh); by_id = {str(r.get("id")): r for r in images}
                 cov = covered(images)
             if not cov:
-                print(f"[{site}] {cat}: REFUSED, templates {used[:10]} pin digest {digest_of(row)[:19]} and no other enabled row carries it yet"); rc = 1; continue
-            print(f"[{site}] {cat}: templates {used[:10]} pin digest {digest_of(row)[:19]}, covered by row(s) {cov}; stable row may move")
+                # Move first, then cover (a2 11-19, D-39 kept: no template is changed). Admin refuses two rows with the
+                # same digest ("remote digest is already used by another catalog image"), so while the stable row holds
+                # the pinned digest no other row can cover it. ONLY when every template pinning the digest is DISABLED
+                # (it cannot be launched) may the stable row move first; a hidden "<name> (pinned <digest>)" row then
+                # takes the freed digest within seconds. If any ENABLED template pins it, the old rule stands: refuse.
+                pinning = [t for t in tpls if str(t.get("image") or t.get("image_id") or "") == cur_img]
+                enabled_pinning = [t.get("id") for t in pinning if t.get("enabled") is not False]
+                if enabled_pinning or not pinning:
+                    print(f"[{site}] {cat}: REFUSED, templates {used[:10]} pin digest {digest_of(row)[:19]} and no other enabled "
+                          f"row carries it yet" + (f" (enabled: {enabled_pinning[:10]})" if enabled_pinning else "")); rc = 1; continue
+                if dry:
+                    print(f"[{site}] {cat}: templates {used[:10]} (all disabled) pin digest {digest_of(row)[:19]}; would move the "
+                          f"stable row first, then create a hidden pinned row for it (dry run)"); continue
+                cover_after = cur_img
+                print(f"[{site}] {cat}: templates {used[:10]} (all disabled) pin digest {digest_of(row)[:19]}; moving the stable row "
+                      f"first, then covering the digest with a hidden pinned row")
+            else:
+                print(f"[{site}] {cat}: templates {used[:10]} pin digest {digest_of(row)[:19]}, covered by row(s) {cov}; stable row may move")
         if dry:
             print(f"[{site}] {cat}: row {rid} '{row.get('name')}' digest={digest_of(row)[:19]} status={row.get('harbor_status')} "
                   f"gt_passed={passed.get(cat, {}).get('digest', '')[:19]} (dry run)")
@@ -322,7 +364,19 @@ def sync_site(site, rows, dry):
                     print(f"[{site}] {cat}: previous row {prev.get('id')} is referenced by templates; left as it is")
                 else:
                     pst, pnew = _adopt(s, site, cat + " (previous)", prev.get("id"))
-                    print(f"[{site}] {cat}: previous row {prev.get('id')}: {pst} {pnew[:19]}")
+                    print(f"[{site}] {cat}: previous row {prev.get('id')}: {pst} {pnew if pst == 'error' else pnew[:19]}")
+            if cover_after:
+                st3, fresh = s.call("GET", "/api/admin/images")
+                still = [r.get("id") for r in (rows_of(fresh) if st3 == 200 else []) if str(r.get("image") or "") == cover_after
+                         and r.get("enabled") is not False]
+                if still:
+                    print(f"[{site}] {cat}: pinned digest {digest_of(row)[:19]} is covered by row(s) {still} after the move")
+                elif not ensure_pinned_row(s, site, cat, row, cover_after):
+                    rc = 1
+                    _status(f"{site} {cat}: stable row moved but the pinned digest {digest_of(row)[:19]} is NOT covered; "
+                            f"disabled templates {used[:10]} need a hidden row carrying it (create by hand)")
+        elif cover_after:
+            print(f"[{site}] {cat}: stable row did not move ({status}); the pinned digest stays on it, nothing to cover")
         if site == "gt":
             cur = new if status == "adopted" else digest_of(row)
             if cur and passed.get(cat, {}).get("digest") != cur:
