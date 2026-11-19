@@ -1,0 +1,7 @@
+# Release settings for this image (read by tools/release.py and tools/upstream_check.py).
+name: rlinf-workshop
+rc_repo: rc/rlinf-workshop        # Harbor: 10.5.10.12:1808/radeon-cloud-global/rc/rlinf-workshop:rc-current is what the catalog row tracks
+catalog_row: "RLinf · Workshop"   # the stable catalog row only; template rows are never touched
+smoke: rlinf-workshop             # runs images/rlinf-workshop/smoke.sh
+upstream:            # the registry/repo come from the Dockerfile's FROM line
+  tag_regex: '^7\.2-complete$'   # the base stays ROCm 7.2 (the version the workshop is validated on); the bot only reports re-pushes of this tag
