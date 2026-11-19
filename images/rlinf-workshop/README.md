@@ -76,10 +76,10 @@ pinned sources only:
 | What | Pinned as | Fetched from (build argument to override) |
 | --- | --- | --- |
 | System packages | [`apt-packages.txt`](apt-packages.txt): the 60 packages the RLinf image installs (dependencies resolved by apt) | Ubuntu archive (`APT_MIRROR`, default `mirrors.aliyun.com`) |
-| Python 3.11.14 | python-build-standalone 20260211, sha256 | `releases.astral.sh`, then GitHub Releases |
+| Python 3.11.14 | python-build-standalone 20260211, sha256 | `registry.npmmirror.com` (a mirror of the GitHub releases), then `releases.astral.sh`, then GitHub Releases |
 | Python packages | [`requirements.txt`](requirements.txt): 326 exact versions, installed with `--no-deps` | `PIP_INDEX_URL` |
 | PyTorch ROCm 7.2 wheels | [`torch-wheels.txt`](torch-wheels.txt): torch, torchvision, triton, pytorch-triton-rocm, triton-rocm, by file name and sha256 | `TORCH_WHEELS_MIRROR` (default the NJU mirror), then download.pytorch.org |
-| flash-attn 2.8.3 for ROCm 7.2 | RLinf's prebuilt wheel, sha256 | GitHub Releases, through `gh-proxy.org` first (`GITHUB_PROXY`; the proxy Radeon Cloud's first-shell help suggests), then github.com |
+| flash-attn 2.8.3 for ROCm 7.2 | RLinf's prebuilt wheel, sha256 | GitHub Releases, through `gh-proxy.com` first (`GITHUB_PROXY`), then github.com |
 | Lingbot-VLA (+ lingbot-depth, MoGe), LeRobot, RLinf, RoboTwin | commits | `codeload.github.com` ([`fetch.py`](fetch.py), with retries) |
 
 Every fetched file (not a commit) is checked by sha256, so a mirror or proxy cannot change what is installed. A stalled
