@@ -33,7 +33,8 @@ RUN sed -i -e "s@//.*archive.ubuntu.com@//${APT_MIRROR}@g" -e "s@//security.ubun
     apt-get -o Dir::Etc::SourceParts=/dev/null update && \
     grep -v '^#' /tmp/rc/apt-packages.txt | DEBIAN_FRONTEND=noninteractive xargs apt-get -o Dir::Etc::SourceParts=/dev/null \
         install -y --no-install-recommends && \
-    rm -rf /var/lib/apt/lists/*
+    rm -rf /var/lib/apt/lists/* && \
+    rm -f /etc/ssh/ssh_host_*   # openssh-server's postinst generates host keys; the platform makes per-instance ones
 
 COPY requirements.txt torch-wheels.txt fetch.py /tmp/rc/
 
