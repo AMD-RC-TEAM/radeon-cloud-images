@@ -31,47 +31,87 @@ def sh(*cmd, check=True, **kw):
     return r.stdout
 
 
-FROM_RE = re.compile(r"^FROM\s+(?P<ref>(?P<registry>[^/\s]+)/(?P<repo>\S+?):(?P<tag>[^:@/\s]+)@(?P<digest>sha256:[0-9a-f]{64}))\s*$", re.M)
+# Pin every public FROM: registry/repo:tag@sha256:<64 hex>, optional `AS name` after the digest.
+# Multi-stage Dockerfiles are allowed; each public digest is mirrored and rewritten to Harbor.
+FROM_RE = re.compile(
+    r"^FROM\s+(?P<ref>(?P<registry>[^/\s]+)/(?P<repo>\S+?):(?P<tag>[^:@/\s]+)@(?P<digest>sha256:[0-9a-f]{64}))"
+    r"(?:\s+[Aa][Ss]\s+\S+)?\s*$",
+    re.M,
+)
+HARBOR_REG = ("10.5.10.12", "36.150.116.202")
+
+
+def _from_line(l):
+    s = l.strip()
+    return s.startswith("FROM ") or s.startswith("FROM\t")
+
+
+def from_entries(df):
+    """Every pinned public FROM in a Dockerfile. Harbor addresses are refused."""
+    out = []
+    for frm in FROM_RE.finditer(df):
+        if frm["registry"].startswith(HARBOR_REG):
+            raise SystemExit("FROM must name the public upstream, not our Harbor (the tooling mirrors it)")
+        reg = frm["registry"]
+        mirror_repo = frm["repo"] if reg == "docker.io" else f"{reg}/{frm['repo']}"
+        out.append({"registry": reg, "repo": frm["repo"], "tag": frm["tag"], "digest": frm["digest"],
+                    "ref": frm["ref"], "mirror_repo": mirror_repo,
+                    "harbor_ref": f"{PULL}/{mirror_repo}@{frm['digest']}"})
+    return out
+
+
+def rewrite_froms(df, entries=None):
+    entries = from_entries(df) if entries is None else entries
+    for frm in entries:
+        df = df.replace(frm["ref"], frm["harbor_ref"], 1)
+    return df
 
 
 def parse(image):
-    """images/<image>/Dockerfile must FROM the real public upstream, pinned: FROM <registry>/<repo>:<tag>@sha256:<digest>.
-    The tooling mirrors that digest into Harbor on demand and builds/smokes from the Harbor copy, so cluster nodes
-    never pull from the internet. Hand-written Harbor paths are refused."""
+    """images/<image>/Dockerfile must FROM the real public upstream, pinned:
+    FROM <registry>/<repo>:<tag>@sha256:<digest> [AS name].
+    Every such line is mirrored into Harbor and rewritten, so cluster nodes never pull from the internet.
+    Hand-written Harbor paths are refused. More than one FROM is allowed (multi-stage)."""
     d = os.path.join(ROOT, "images", image)
     df = open(os.path.join(d, "Dockerfile")).read()
-    frm = FROM_RE.search(df)
-    if not frm:
+    froms = from_entries(df)
+    n_from = sum(1 for l in df.splitlines() if _from_line(l))
+    if not froms:
         raise SystemExit(f"{image}: the Dockerfile needs 'FROM <registry>/<repo>:<tag>@sha256:<digest>' "
                          "(the public upstream, e.g. docker.io/rocm/pytorch:<tag>@sha256:...)")
-    if frm["registry"].startswith(("10.5.10.12", "36.150.116.202")) or len(FROM_RE.findall(df)) > 1:
-        raise SystemExit(f"{image}: FROM must name the public upstream once, not our Harbor (the tooling mirrors it)")
+    if n_from != len(froms):
+        raise SystemExit(f"{image}: every FROM must be '<registry>/<repo>:<tag>@sha256:<digest>' "
+                         "(optional AS name); unpinned or Harbor FROM lines are refused")
     build_steps = [l for l in df.splitlines() if l.strip() and not l.lstrip().startswith("#") and not l.startswith("FROM")]
     cfg = {}
     for l in open(os.path.join(d, "image.yaml")):
         m = re.match(r"^(\w+):\s*(.*?)\s*(?:#.*)?$", l)
         if m and m.group(2):
             cfg[m.group(1)] = m.group(2).strip("'\"")
-    reg = frm["registry"]
-    mirror_repo = frm["repo"] if reg == "docker.io" else f"{reg}/{frm['repo']}"
-    harbor_ref = f"{PULL}/{mirror_repo}@{frm['digest']}"
-    return {"dir": d, "registry": reg, "repo": frm["repo"], "tag": frm["tag"], "digest": frm["digest"],
-            "from": frm["ref"], "mirror_repo": mirror_repo, "harbor_ref": harbor_ref,
-            "build_dockerfile": df.replace(frm["ref"], harbor_ref, 1), "build": bool(build_steps), **cfg}
+    runtime = froms[-1]
+    return {"dir": d, "registry": runtime["registry"], "repo": runtime["repo"], "tag": runtime["tag"],
+            "digest": runtime["digest"], "from": runtime["ref"], "mirror_repo": runtime["mirror_repo"],
+            "harbor_ref": runtime["harbor_ref"], "froms": froms,
+            "build_dockerfile": rewrite_froms(df, froms), "build": bool(build_steps), **cfg}
 
 
 def ensure_mirror(m):
-    if harbor.artifact(m["mirror_repo"], m["digest"]):
-        print(f"mirror: {m['mirror_repo']}@{m['digest'][:19]} already in Harbor")
+    for frm in m["froms"]:
+        _ensure_one_mirror(frm)
+
+
+def _ensure_one_mirror(frm):
+    if harbor.artifact(frm["mirror_repo"], frm["digest"]):
+        print(f"mirror: {frm['mirror_repo']}@{frm['digest'][:19]} already in Harbor")
         return
-    if m["registry"] != "docker.io":
-        raise SystemExit(f"{m['registry']}/{m['repo']}@{m['digest'][:19]} is not in Harbor and only Docker Hub upstreams are "
-                         f"mirrored automatically; copy it into radeon-cloud-global/{m['mirror_repo']} first (rc-ops)")
+    if frm["registry"] != "docker.io":
+        raise SystemExit(f"{frm['registry']}/{frm['repo']}@{frm['digest'][:19]} is not in Harbor and only Docker Hub upstreams are "
+                         f"mirrored automatically; copy it into radeon-cloud-global/{frm['mirror_repo']} first (rc-ops)")
     out = tempfile.mkdtemp(prefix="mirror-")
-    target = f"{PUSH}/{m['mirror_repo']}:{m['tag']}"
-    print(f"mirror: fetching {m['repo']}@{m['digest'][:19]} -> {target}")
-    r = subprocess.run([os.path.join(ROOT, "tools", "mirror.sh"), m["repo"], m["digest"], out, target], text=True)
-    if r.returncode or not harbor.artifact(m["mirror_repo"], m["digest"]):
+    target = f"{PUSH}/{frm['mirror_repo']}:{frm['tag']}"
+    print(f"mirror: fetching {frm['repo']}@{frm['digest'][:19]} -> {target}")
+    r = subprocess.run([os.path.join(ROOT, "tools", "mirror.sh"), frm["repo"], frm["digest"], out, target], text=True)
+    if r.returncode or not harbor.artifact(frm["mirror_repo"], frm["digest"]):
         raise SystemExit("mirror failed or digest not in Harbor afterwards")
 
 
