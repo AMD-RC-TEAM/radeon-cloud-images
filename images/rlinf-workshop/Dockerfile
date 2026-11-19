@@ -91,7 +91,8 @@ ARG LINGBOT_VLA_COMMIT=a57f084679bccf976d90b2fe8b9a2372c81d86c2
 ARG LINGBOT_DEPTH_COMMIT=64f964fbce4746bccd251b7ed5a10efa922b6675
 ARG MOGE_COMMIT=07444410f1e33f402353b99d6ccd26bd31e469e8
 # GitHub Releases downloads go through this proxy first (gh-proxy.org stopped answering from the build cluster on
-# 2026-11-19, and GitHub release assets time out there), then directly to github.com; the file is checked by sha256 either way. Set it empty to use github.com only.
+# 2026-11-19, and GitHub release assets time out there), then directly to github.com; the file is checked by sha256
+# either way. Set it empty to use github.com only.
 ARG GITHUB_PROXY=https://gh-proxy.com/
 ARG FLASH_ATTN_WHEEL=flash_attn-2.8.3+rocm7.2torch2.11cxx11abiTRUE-cp311-cp311-linux_x86_64.whl
 ARG FLASH_ATTN_WHEEL_URL=https://github.com/RLinf/flash-attention/releases/download/v2.8.3/flash_attn-2.8.3%2Brocm7.2torch2.11cxx11abiTRUE-cp311-cp311-linux_x86_64.whl
