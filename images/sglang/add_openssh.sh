@@ -15,7 +15,9 @@ esac
 src=/etc/apt/sources.list
 [ -r /etc/apt/sources.list.d/ubuntu.sources ] && src=/etc/apt/sources.list.d/ubuntu.sources
 [ -r /etc/apt/sources.list.d/debian.sources ] && src=/etc/apt/sources.list.d/debian.sources
-tmp=$(mktemp)
+# Keep the file name: apt parses deb822 (*.sources) and one-line (*.list) formats by extension.
+tmpd=$(mktemp -d)
+tmp="$tmpd/$(basename "$src")"
 cp "$src" "$tmp"
 # APT_MIRROR (build arg): a mirror reachable from the build cluster. Only the distribution source is used, so
 # third-party repositories in the base image are neither needed nor contacted.
@@ -31,7 +33,7 @@ export DEBIAN_FRONTEND=noninteractive
 opts="-o Dir::Etc::sourcelist=$tmp -o Dir::Etc::sourceparts=-"
 apt-get $opts update
 apt-get $opts install -y --no-install-recommends openssh-server
-rm -rf /var/lib/apt/lists/* "$tmp"
+rm -rf /var/lib/apt/lists/* "$tmpd"
 [ "$created_policy" = 1 ] && rm -f /usr/sbin/policy-rc.d
 rm -f /etc/ssh/ssh_host_*
 command -v sshd >/dev/null 2>&1 || [ -x /usr/sbin/sshd ]
