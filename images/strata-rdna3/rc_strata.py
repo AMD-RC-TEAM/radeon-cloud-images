@@ -1,11 +1,12 @@
 """Load images/strata-rdna3/models.yaml (a small YAML subset) and plan a strata launch."""
 from __future__ import annotations
 
-import hashlib, os, re, urllib.request
+import hashlib, os, re, urllib.error, urllib.request
 from pathlib import Path
 
 MANIFEST = Path(os.environ.get("STRATA_MODELS_YAML", "/opt/rc-strata/models.yaml"))
-MODELS_ROOT = Path(os.environ.get("STRATA_MODELS_ROOT", "/data/models"))
+MODELS_ROOT = Path(os.environ.get("STRATA_MODELS_ROOT", "/data/Strata-data/rc-models"))
+RC_MODELS = Path("/data/Strata-data/rc-models")
 
 
 def _promote_lists(path: Path, lines: list[str], root: dict) -> dict:
@@ -95,8 +96,25 @@ def load_manifest(path: Path | None = None) -> dict:
         if not parent.get("files"):
             raise SystemExit(f"{path}: {name}: files_from {src!r} has no files")
         spec["files"] = parent["files"]
-        spec.setdefault("dest", parent.get("dest"))
     return data
+
+
+def model_dir(model_name: str, dest_dir: Path | None = None) -> Path:
+    """Folder for a preset: STRATA_MODELS_ROOT/<name>. YAML dest: is ignored so the env var always wins."""
+    return dest_dir or (MODELS_ROOT / model_name)
+
+
+def search_roots() -> list[Path]:
+    """Look under the env var root, and also the default rc-models path if it differs."""
+    out: list[Path] = []
+    seen: set[str] = set()
+    for p in (MODELS_ROOT, RC_MODELS):
+        key = str(p)
+        if key in seen:
+            continue
+        seen.add(key)
+        out.append(p)
+    return out
 
 
 def hf_endpoint() -> str:
@@ -108,7 +126,7 @@ def file_url(entry: dict) -> str:
 
 
 def dest_path(model_name: str, entry: dict, dest_dir: Path | None = None) -> Path:
-    folder = dest_dir or (MODELS_ROOT / model_name)
+    folder = dest_dir or model_dir(model_name)
     return folder / Path(entry["path"]).name
 
 
@@ -140,6 +158,8 @@ def file_ok(path: Path, entry: dict) -> bool:
 def find_existing(entry: dict, root: Path) -> Path | None:
     want = entry["sha256"]
     name = Path(entry["path"]).name
+    if not root.exists():
+        return None
     for p in root.rglob(name):
         if file_ok(p, entry):
             return p
@@ -150,13 +170,17 @@ def find_existing(entry: dict, root: Path) -> Path | None:
 
 
 def ensure_files(model_name: str, spec: dict, dest_dir: Path | None = None, download: bool = True) -> Path:
-    folder = dest_dir or Path(spec.get("dest") or (MODELS_ROOT / model_name))
+    folder = model_dir(model_name, dest_dir)
     folder.mkdir(parents=True, exist_ok=True)
     for entry in spec["files"]:
         dest = dest_path(model_name, entry, folder)
         if file_ok(dest, entry):
             continue
-        existing = find_existing(entry, MODELS_ROOT)
+        existing = None
+        for root in search_roots():
+            existing = find_existing(entry, root)
+            if existing:
+                break
         if existing and existing.resolve() != dest.resolve():
             dest.unlink(missing_ok=True)
             try:
@@ -177,33 +201,62 @@ def ensure_files(model_name: str, spec: dict, dest_dir: Path | None = None, down
 def _download(url: str, dest: Path, size: int) -> None:
     dest.parent.mkdir(parents=True, exist_ok=True)
     tmp = dest.with_name(dest.name + ".part")
-    have = tmp.stat().st_size if tmp.is_file() else 0
-    headers = {"User-Agent": "strata-rdna3-image"}
-    if have:
-        headers["Range"] = f"bytes={have}-"
-    print(f"downloading {url} -> {dest} ({have}/{size} bytes)", flush=True)
     last_err = None
-    for attempt in range(1, 6):
+    stale = 0
+    while stale < 5:
+        have = tmp.stat().st_size if tmp.is_file() else 0
+        if have == size:
+            break
+        if have > size:
+            tmp.unlink()
+            have = 0
+        headers = {"User-Agent": "strata-rdna3-image"}
+        if have > 0:
+            headers["Range"] = f"bytes={have}-"
+        print(f"downloading {url} -> {dest} ({have}/{size} bytes)", flush=True)
+        before = have
         try:
             req = urllib.request.Request(url, headers=headers)
-            with urllib.request.urlopen(req, timeout=120) as r, tmp.open("ab" if have else "wb") as out:
-                while True:
-                    chunk = r.read(1 << 20)
-                    if not chunk:
-                        break
-                    out.write(chunk)
-            last_err = None
-            break
+            with urllib.request.urlopen(req, timeout=120) as r:
+                code = getattr(r, "status", None) or r.getcode()
+                if have > 0 and code == 200:
+                    tmp.unlink(missing_ok=True)
+                    have = 0
+                    mode = "wb"
+                elif have > 0 and code != 206:
+                    raise OSError(f"expected HTTP 206 for resume, got {code}")
+                else:
+                    mode = "ab" if have else "wb"
+                with tmp.open(mode) as out:
+                    while True:
+                        chunk = r.read(1 << 20)
+                        if not chunk:
+                            break
+                        out.write(chunk)
+        except urllib.error.HTTPError as e:
+            last_err = e
+            if e.code == 416 and tmp.is_file() and tmp.stat().st_size == size:
+                last_err = None
+                break
+            print(f"download failed: {e}", flush=True)
         except Exception as e:  # noqa: BLE001
             last_err = e
-            print(f"download attempt {attempt} failed: {e}", flush=True)
-            have = tmp.stat().st_size if tmp.is_file() else 0
-            headers["Range"] = f"bytes={have}-"
+            print(f"download failed: {e}", flush=True)
+        after = tmp.stat().st_size if tmp.is_file() else 0
+        if after == size:
+            last_err = None
+            break
+        if after > before:
+            stale = 0
+        else:
+            stale += 1
+    if tmp.is_file() and tmp.stat().st_size == size:
+        tmp.replace(dest)
+        return
     if last_err:
         raise SystemExit(f"could not download {url}: {last_err}")
-    tmp.replace(dest)
-    if dest.stat().st_size != size:
-        raise SystemExit(f"{dest} is {dest.stat().st_size} bytes, expected {size}")
+    have = dest.stat().st_size if dest.is_file() else (tmp.stat().st_size if tmp.is_file() else 0)
+    raise SystemExit(f"{dest} is {have} bytes, expected {size}")
 
 
 def launch_argv(name: str, spec: dict, extra: list[str], *, model_path: Path | None = None) -> list[str]:

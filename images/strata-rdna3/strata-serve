@@ -5,14 +5,16 @@
     strata-serve --list
     strata-serve --plan --model <name>
 
-Weights are not in the image. The first start downloads them to /data/models and
-checks every sha256; later starts reuse files whose size and hash still match.
+Weights are not in the image. The first start downloads them to
+$STRATA_MODELS_ROOT/<name> (default /data/Strata-data/rc-models) and checks
+every sha256; later starts reuse files whose size and hash still match.
+The folder is outside the names the upstream entrypoint migrates (models packs mtp).
 Extra flags after --model override the gfx1100 preset. The server listens on
 port 8080 (OpenAI- and Anthropic-compatible APIs, GET /health).
 """
 from __future__ import annotations
 
-import argparse, os, resource, shutil, sys
+import argparse, os, resource, shutil, sys, tempfile
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
@@ -23,7 +25,6 @@ import rc_strata  # noqa: E402
 STRATA = os.environ.get("STRATA", "/opt/strata/terminal/bin/strata")
 ENTRYPOINT = os.environ.get("STRATA_ENTRYPOINT", "/opt/strata/entrypoint.sh")
 DSV41_EXE_FILE = Path("/etc/strata-dsv41-exe")
-EXTRA_ARGS = Path("/tmp/strata-launch-extra.args")
 
 
 def dsv41_exe() -> str | None:
@@ -45,7 +46,16 @@ def print_list(manifest: dict) -> None:
         print(f"{name:<30}{n.get('gpus', '?'):<6}{str(n.get('disk_gb', '?')) + ' GB':<8}{spec['family']} / {spec['model']}")
 
 
-def build_env(name: str, spec: dict, folder: Path, extra: list[str]) -> dict[str, str]:
+def write_extra_args(extra: list[str]) -> str:
+    fd, path = tempfile.mkstemp(prefix="strata-launch-extra.", suffix=".args")
+    try:
+        os.write(fd, ("\n".join(extra) + "\n").encode())
+    finally:
+        os.close(fd)
+    return path
+
+
+def build_env(name: str, spec: dict, folder: Path, extra: list[str], *, write_extra: bool = True) -> dict[str, str]:
     env = os.environ.copy()
     env.update(rc_strata.env_for(spec))
     gfx = spec.get("gfx1100") or {}
@@ -66,16 +76,13 @@ def build_env(name: str, spec: dict, folder: Path, extra: list[str]) -> dict[str
         env["STRATA_SET"] = " ".join(sets)
     env["STRATA_FEED_MODELS"] = "0"
     env["ALLOW_DOWNLOAD"] = env.get("ALLOW_DOWNLOAD") or "1"
-    if extra:
-        EXTRA_ARGS.write_text("\n".join(extra) + "\n")
-        env["STRATA_LAUNCH_EXTRA"] = str(EXTRA_ARGS)
+    if extra and write_extra:
+        env["STRATA_LAUNCH_EXTRA"] = write_extra_args(extra)
+    elif extra:
+        env["STRATA_LAUNCH_EXTRA"] = "<tempfile: " + " ".join(extra) + ">"
     elif "STRATA_LAUNCH_EXTRA" in env:
         del env["STRATA_LAUNCH_EXTRA"]
     return env
-
-
-def cmd_for(name: str, spec: dict, extra: list[str], model_path: Path | None) -> list[str]:
-    return [STRATA, *rc_strata.launch_argv(name, spec, extra, model_path=model_path)]
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -104,7 +111,7 @@ def main(argv: list[str] | None = None) -> int:
         print_list(manifest)
         return 2
 
-    dest = Path(spec.get("dest") or (rc_strata.MODELS_ROOT / name))
+    dest = rc_strata.model_dir(name)
     if a.plan:
         print(f"model: {name}")
         print(f"strata: --family {spec['family']} --model {spec['model']}")
@@ -113,10 +120,17 @@ def main(argv: list[str] | None = None) -> int:
         for e in spec["files"]:
             mark = "ok" if rc_strata.file_ok(rc_strata.dest_path(name, e, dest), e) else "download"
             print(f"  [{mark}] {e['bytes']} {e['sha256'][:12]} {e['repo']} {e['path']}")
-        argv = cmd_for(name, spec, extra, dest)
-        env = rc_strata.env_for(spec)
-        print("env:", " ".join(f"{k}={v}" for k, v in env.items()))
-        print("exec:", " ".join(argv))
+        env = build_env(name, spec, dest, extra, write_extra=False)
+        show = {k: env[k] for k in (
+            "FAMILY", "MODEL", "MODEL_PATH", "PORT", "VISION", "SPEED", "GPUS",
+            "STRATA_SET", "STRATA_DSV41_EXE", "STRATA_FEED_MODELS", "ALLOW_DOWNLOAD",
+            "STRATA_LAUNCH_EXTRA",
+        ) if k in env}
+        show.update(rc_strata.env_for(spec))
+        print("run: " + ENTRYPOINT + " run")
+        print("note: approximate; the upstream entrypoint hard-codes --data-dir /data/Strata-data "
+              "(STRATA_DATA_DIR is ignored) and adds --preset docker")
+        print("env:", " ".join(f"{k}={v}" for k, v in show.items()))
         return 0
 
     folder = rc_strata.ensure_files(name, spec, dest)

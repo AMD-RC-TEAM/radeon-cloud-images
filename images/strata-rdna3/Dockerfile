@@ -12,17 +12,12 @@ ARG STRATA_COMMIT=d2f096475817d4666c364c820b0ca830f751cfc5
 ARG STRATA_SHA256=7093283d24ad4f9bc9a379607340678261c60e4539919c763c7555b1b5669195
 ARG LLAMA_COMMIT=3cf03257f219afbe7334045ff7c6a06ac68c627d
 ARG LLAMA_SHA256=c076d7534afa0e5d0ec2a0d425b11e791c16f3de0d727221aea071cef156a280
-# In-tree pr-5829.patch is the v0.2.13-applicable hunks of Niko1221/Strata#5829 at this head.
-# The patch is COPY'd, not fetched by SHA at build time.
-ARG PR5829_SHA=b17a82a5d7
 
-COPY fetch_src.py pr-5829.patch build_dsv41.sh check_manifest.py rc_strata.py models.yaml /tmp/rc/
+COPY fetch_src.py build_dsv41.sh check_manifest.py rc_strata.py models.yaml /tmp/rc/
 RUN python3 /tmp/rc/fetch_src.py tar Niko1221/Strata ${STRATA_COMMIT} ${STRATA_SHA256} /src/strata \
  && python3 /tmp/rc/fetch_src.py tar ggml-org/llama.cpp ${LLAMA_COMMIT} ${LLAMA_SHA256} /src/llama.cpp \
- && patch -p1 -d /src/strata < /tmp/rc/pr-5829.patch \
  && python3 /tmp/rc/check_manifest.py /tmp/rc/models.yaml /src/strata/setup.py \
- && JOBS=16 sh /tmp/rc/build_dsv41.sh /src/strata /src/llama.cpp /out \
- && cp /src/strata/strata_control/dsv41_fit.py /out/dsv41_fit.py \
+ && COMMIT=${STRATA_COMMIT} JOBS=16 sh /tmp/rc/build_dsv41.sh /src/strata /src/llama.cpp /out \
  && cp /opt/rocm/bin/rocminfo /out/rocminfo \
  && rm -rf /src /tmp/rc /root/.cache
 
@@ -33,7 +28,7 @@ FROM ghcr.io/niko1221/strata:0.2.13-rocm-gfx110x@sha256:a68f6ac1d013436115f025b6
 ARG PIP_INDEX_URL
 
 COPY --from=dsv41-build /out/components/dsv41/ /opt/strata/components/dsv41/
-COPY --from=dsv41-build /out/dsv41_fit.py /out/rocminfo /tmp/rc-dsv41/
+COPY --from=dsv41-build /out/rocminfo /tmp/rc-dsv41-rocminfo
 COPY models.yaml rc_strata.py strata-serve check_manifest.py README.md patch_entrypoint.py /tmp/rc/
 RUN set -e \
  && exe=$(find /opt/strata/components/dsv41 -type f -name strata-dsv41 | head -n1) \
@@ -43,35 +38,37 @@ RUN set -e \
  && install -m 644 /tmp/rc/models.yaml /tmp/rc/rc_strata.py /tmp/rc/README.md /opt/rc-strata/ \
  && install -m 755 /tmp/rc/strata-serve /tmp/rc/check_manifest.py /usr/local/bin/ \
  && ln -sf /usr/local/bin/strata-serve /opt/rc-strata/strata-serve \
- && printf '0.2.13\n' > /opt/rc-strata/VERSION \
+ && /opt/strata/terminal/bin/strata --version > /opt/rc-strata/VERSION \
  && /opt/strata/terminal/python/bin/python3 /tmp/rc/patch_entrypoint.py /opt/strata/entrypoint.sh \
- && fit=$(find /opt/strata/terminal -name dsv41_fit.py | head -n1) \
- && test -n "$fit" \
- && install -m 644 /tmp/rc-dsv41/dsv41_fit.py "$fit" \
- && install -m 755 /tmp/rc-dsv41/rocminfo "$(dirname "$exe")/rocminfo" \
+ && install -m 755 /tmp/rc-dsv41-rocminfo "$(dirname "$exe")/rocminfo" \
  && printf '%s\n' '#!/bin/sh' "LD_LIBRARY_PATH=$(dirname "$exe"):\${LD_LIBRARY_PATH:-} exec $(dirname "$exe")/rocminfo \"\$@\"" > /usr/local/bin/rocminfo \
  && chmod 755 /usr/local/bin/rocminfo \
- && rm -rf /tmp/rc /tmp/rc-dsv41
+ && rm -rf /tmp/rc /tmp/rc-dsv41-rocminfo
 
 # The upstream image has no system Python (only bundled CPython 3.12). JupyterLab needs its own.
 # Ubuntu 24.04 is PEP 668; pip.conf lets add_jupyterlab.sh install without changing Strata's wheels.
+# Pins from Launchpad noble-updates (amd64) on 2026-11-19. The HIP runtime already has libdrm2 and
+# ca-certificates; smoke uses python3 instead of curl/procps.
 RUN apt-get update \
- && apt-get install -y --no-install-recommends python3 python3-pip python3-venv ca-certificates curl procps libdrm2 \
+ && apt-get install -y --no-install-recommends \
+      python3=3.12.3-0ubuntu2.1 \
+      python3-pip=24.0+dfsg-1ubuntu1.3 \
  && printf '[global]\nbreak-system-packages = true\n' > /etc/pip.conf \
  && rm -rf /var/lib/apt/lists/*
 
 # Radeon Cloud's launch step pip-installs JupyterLab into any image that lacks a compatible one (18-188 s per launch).
 # Bake it in, pinned, without changing anything already installed (add_jupyterlab.sh; the smoke verifies both).
 COPY add_jupyterlab.sh /tmp/add_jupyterlab.sh
-RUN sh /tmp/add_jupyterlab.sh && rm -f /tmp/add_jupyterlab.sh
+RUN sh /tmp/add_jupyterlab.sh && rm -f /tmp/add_jupyterlab.sh /etc/pip.conf
 
 # HSA_USERPTR_FOR_PAGED_MEM=0: avoid paged-memory queue stalls on gfx1100 (this image is ROCm 7.2.4).
 # GPU_PINNED_MIN_XFER_SIZE=1048576: HIP pinned-transfer floor used with mmap-experts.
 # HSA_DISABLE_COREDUMP_ON_EXCEPTION=1 plus ulimit -c 0 in strata-serve: no core dumps.
 # With ROCm >= 10.2 also set HSA_SVM_FOR_PAGED_MEM=0; this image is 7.2.4, so it is not set.
+# STRATA_DATA_DIR is documented for operators; the upstream entrypoint hard-codes --data-dir /data/Strata-data.
 ENV STRATA_FEED_MODELS=0 \
     STRATA_MODELS_YAML=/opt/rc-strata/models.yaml \
-    STRATA_MODELS_ROOT=/data/models \
+    STRATA_MODELS_ROOT=/data/Strata-data/rc-models \
     STRATA_DATA_DIR=/data/Strata-data \
     PORT=8080 \
     SHELL=/bin/bash \

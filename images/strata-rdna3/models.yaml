@@ -11,7 +11,6 @@ models:
     family: deepseek41
     model: IST-DAS-2.25bpw
     engine: strata-dsv41
-    dest: /data/models/deepseek-v4.1-flash-2.25
     needs: {gpus: 4, disk_gb: 274}
     gfx1100:
       # full = --experts 6 (default). prefill-chunk=1024 is a separate measured optimization, not the 5-expert speedup.
@@ -61,7 +60,6 @@ models:
     family: deepseek41
     model: IST-DAS-2.25bpw
     engine: strata-dsv41
-    dest: /data/models/deepseek-v4.1-flash-2.25
     needs: {gpus: 4, disk_gb: 274}
     files_from: deepseek-v4.1-flash-2.25
     gfx1100:
@@ -74,7 +72,6 @@ models:
     family: deepseek41
     model: IST-DAS-2.00bpw
     engine: strata-dsv41
-    dest: /data/models/deepseek-v4.1-flash-2.00
     needs: {gpus: 4, disk_gb: 257}
     gfx1100:
       speed: full
@@ -121,7 +118,6 @@ models:
     family: deepseek41
     model: IST-DAS-2.00bpw
     engine: strata-dsv41
-    dest: /data/models/deepseek-v4.1-flash-2.00
     needs: {gpus: 4, disk_gb: 257}
     files_from: deepseek-v4.1-flash-2.00
     gfx1100:
@@ -133,7 +129,6 @@ models:
     family: qwen
     model: IQ3_S
     engine: strata
-    dest: /data/models/qwen3.8-flash-next-iq3_s
     needs: {gpus: 2, disk_gb: 84}
     gfx1100:
       vision: off
@@ -153,7 +148,6 @@ models:
     family: qwen36
     model: UD-Q4_K_XL
     engine: strata
-    dest: /data/models/qwen3.6-35b-a3b-q4
     needs: {gpus: 1, disk_gb: 23}
     gfx1100:
       vision: off
