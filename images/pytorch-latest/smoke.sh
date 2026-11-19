@@ -5,6 +5,7 @@
 set -euo pipefail
 . "$(dirname "$0")/smoke_lib.sh"
 jupyterlab_fast_path
+openssh_baked
 no_in_image_welcome
 echo "== rocminfo"; grep -m1 -E 'gfx1100' <<<"$(rocminfo)"
 echo "== torch"

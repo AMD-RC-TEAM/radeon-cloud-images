@@ -5,6 +5,7 @@
 set -euo pipefail
 . "$(dirname "$0")/smoke_lib.sh"
 jupyterlab_fast_path
+openssh_baked
 no_in_image_welcome
 MODEL=${SMOKE_MODEL_DIR:-/models/Qwen2.5-0.5B-Instruct}
 PORT=30000

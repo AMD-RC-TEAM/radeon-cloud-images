@@ -36,6 +36,12 @@ RUN SP=$(python3 -c "import sysconfig; print(sysconfig.get_paths()['purelib'])")
  && install -D -m 644 /tmp/rc/README.md /opt/sglang/README.md \
  && rm -rf /tmp/rc
 
+# OpenSSH server baked in, so Radeon Cloud's SSH setup finds sshd and skips its launch-time apt install
+# (which depends on the Ubuntu archive being fast from the cluster). Host keys are generated per instance.
+ARG APT_MIRROR=mirrors.aliyun.com
+COPY add_openssh.sh /tmp/add_openssh.sh
+RUN sh /tmp/add_openssh.sh && rm -f /tmp/add_openssh.sh
+
 # Radeon Cloud's launch step pip-installs JupyterLab into any image that lacks a compatible one (18-188 s per launch).
 # Bake it in, pinned, without changing anything already installed (add_jupyterlab.sh; the smoke verifies both).
 COPY add_jupyterlab.sh /tmp/add_jupyterlab.sh

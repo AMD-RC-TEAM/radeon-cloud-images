@@ -4,6 +4,7 @@
 set -euo pipefail
 . "$(dirname "$0")/smoke_lib.sh"
 jupyterlab_fast_path
+openssh_baked
 no_in_image_welcome
 grep -m1 -E 'gfx1100' <<<"$(rocminfo)"
 python3 -c 'import torch; assert torch.cuda.is_available(); x = torch.randn(1024, 1024, device="cuda", dtype=torch.float16); print("torch", torch.__version__, "matmul ok", float((x @ x).float().abs().mean()) > 0)'

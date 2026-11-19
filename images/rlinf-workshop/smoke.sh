@@ -9,7 +9,7 @@ set -euo pipefail
 
 # 1. The launch fast path: JupyterLab is baked in (jupyter and python on PATH are the Lingbot-VLA environment's).
 jupyterlab_fast_path
-
+openssh_baked
 # 2. The GPU: exactly one gfx1100, and a half-precision matmul in PyTorch.
 echo "== rocminfo"; grep -m1 -E 'gfx1100' <<<"$(rocminfo)"
 echo "== torch"
