@@ -217,14 +217,14 @@ def watch_manual_rows(site, images):
     if site in seen:
         new = [r for r in images if str(r.get("source_type") or "") == "manual" and int(r["id"]) not in seen[site]]
         for r in new:
-            _status(f"新的 manual 镜像行：{site} 行 {r['id']} '{r.get('name')}' picker_visible={r.get('picker_visible')}（可能是 manager 重启后重新 seed 的；告诉 rc-ux 和 a2）")
+            _status(f"New manual image row: {site} row {r['id']} '{r.get('name')}' picker_visible={r.get('picker_visible')} (possibly re-seeded by a manager restart; tell rc-ux and a2)")
     seen[site] = ids
     _jwrite(MANUAL_SEEN, seen)
     # a2 11-13: China 247 (the seeded "AMD OneClick Base") must exist and stay hidden; it absorbs the default-image seed.
     if site == "china":
         r247 = next((r for r in images if str(r.get("id")) == "247"), None)
         if r247 is None or r247.get("picker_visible") is not False:
-            _status(f"China 行 247（seed 出来的 AMD OneClick Base）状态异常：{'不存在' if r247 is None else 'picker_visible=' + str(r247.get('picker_visible'))}。需要人工用守卫工具隐藏，并告诉 a2 和 rc-ux")
+            _status(f"China row 247 (the seeded AMD OneClick Base) is in an unexpected state: {'missing' if r247 is None else 'picker_visible=' + str(r247.get('picker_visible'))}. Hide it by hand with the guarded tool and tell a2 and rc-ux")
 
 def _status(line):
     with open(STATUS, "a") as f:
@@ -315,7 +315,7 @@ def sync_site(site, rows, dry):
                 elif site not in rec.get("sites", []):
                     rec.setdefault("sites", []).append(site)
                 _jwrite(PROD_ADOPTED, adopted)
-            _status(f"{site} {cat} 稳定行 {rid} 已 adopt 新 digest {new[:19]}")
+            _status(f"{site} {cat}: stable row {rid} adopted new digest {new[:19]}")
             prev = ensure_previous_row(s, site, cat, row, images)
             if prev:
                 if templates_on(prev, tpls):
@@ -331,10 +331,10 @@ def sync_site(site, rows, dry):
                 if verdict == "pass":
                     passed[cat] = {"digest": cur, "at": dt.datetime.now(dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"), "detail": detail}
                     _jwrite(GT_PASSED, passed)
-                    _status(f"gt {cat} 启动检查通过（{cur[:19]}，{detail}），生产可跟进")
+                    _status(f"gt {cat}: launch check passed ({cur[:19]}, {detail}); production may follow")
                 elif verdict == "fail":
                     rc = 1
-                    _status(f"gt {cat} 启动检查失败（{cur[:19]}：{detail}），生产不跟进")
+                    _status(f"gt {cat}: launch check FAILED ({cur[:19]}: {detail}); production does not follow")
     return rc
 
 
@@ -413,7 +413,7 @@ def check_regressions(dry):
         if n < 5:
             if age > 6 * 3600:
                 r["verdict"] = "insufficient"
-                _status(f"{cat} 生产 adopt 后 6 小时内只有 {n} 次启动，样本太少，不做回滚判断（{summary}）")
+                _status(f"{cat}: only {n} launches in the 6 h after the production adopt, too few to judge a rollback ({summary})")
             continue
         if bad >= 3 and rate > max(2 * brate, brate + 0.10):
             if dry:
@@ -424,13 +424,13 @@ def check_regressions(dry):
                 passed = _jread(GT_PASSED, {})
                 passed[cat] = {"digest": r["prev"], "at": now.strftime("%Y-%m-%dT%H:%M:%SZ"), "detail": "rollback target (was live in production)"}
                 _jwrite(GT_PASSED, passed)
-            msg = (f"[RC 镜像自动回滚] {cat}：生产 adopt 新 digest 后启动失败率变差（{summary}）。"
-                   + (f"已把 rc/{cat}:rc-current 回滚到 {r['prev'][:19]}，各站下一轮同步跟进；新 digest 标为 rc-rolled-back。"
-                      if ok else f"回滚失败，需要人工处理：{out}"))
+            msg = (f"[RC image auto-rollback] {cat}: launch failure rate got worse after the production adopt ({summary}). "
+                   + (f"rc/{cat}:rc-current is rolled back to {r['prev'][:19]}; every site follows on its next sync; the new digest is tagged rc-rolled-back."
+                      if ok else f"Rollback FAILED, needs a person: {out}"))
             _status(msg); feishu(msg)
         else:
             r["verdict"] = "ok"
-            _status(f"{cat} 生产 +1h 检查通过（{summary}）")
+            _status(f"{cat}: production +1h check passed ({summary})")
     if not dry:
         _jwrite(PROD_ADOPTED, adopted)
 
@@ -544,7 +544,7 @@ def sync_descriptions(site, rows, dry):
     out = (r.stdout + r.stderr).strip().splitlines()
     ok = r.returncode == 0 and any("not ok: 0" in l for l in out)
     print(f"[{site}] descriptions: {'applied' if ok else 'FAILED'} {len(chg)} rows; " + " | ".join(out[-4:]))
-    _status(f"{site} 镜像描述加版本：{'已更新' if ok else '失败'} {len(chg)} 行（{', '.join(rid for _, rid, _, _ in chg)}），经 meta_run 守卫工具" + ("" if ok else "；需要人工看"))
+    _status(f"{site} image descriptions with versions: {'updated' if ok else 'FAILED'} {len(chg)} rows ({', '.join(rid for _, rid, _, _ in chg)}) via the meta_run guarded tool" + ("" if ok else "; needs a person"))
     return 0 if ok else 1
 
 
