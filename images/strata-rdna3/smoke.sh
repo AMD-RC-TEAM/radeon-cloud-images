@@ -6,8 +6,7 @@
 set -euo pipefail
 . "$(dirname "$0")/smoke_lib.sh"
 jupyterlab_fast_path
-welcome_once
-welcome_jupyter_terminal
+no_in_image_welcome
 grep -m1 -E 'gfx1100' <<<"$(rocminfo)"
 command -v strata-serve >/dev/null
 command -v strata-dsv41 >/dev/null || test -s /etc/strata-dsv41-exe

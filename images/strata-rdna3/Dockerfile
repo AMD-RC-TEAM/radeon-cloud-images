@@ -65,11 +65,6 @@ RUN apt-get update \
 COPY add_jupyterlab.sh /tmp/add_jupyterlab.sh
 RUN sh /tmp/add_jupyterlab.sh && rm -f /tmp/add_jupyterlab.sh
 
-# First-terminal tips (tools/welcome/, put into every build context as rc-welcome/): what this image is and how
-# to expose a web app with rc-tunnel. Printed once per home directory; `bash -c` and scripts stay silent.
-COPY rc-welcome/ /tmp/rc-welcome/
-RUN sh /tmp/rc-welcome/add_welcome.sh "Strata on RDNA3 (gfx1100): strata-serve --model <name>" "/opt/rc-strata/README.md" "Strata API: strata-serve --model <name> then rc-tunnel expose --port 8080" && rm -rf /tmp/rc-welcome
-
 # HSA_USERPTR_FOR_PAGED_MEM=0: avoid paged-memory queue stalls on gfx1100 (this image is ROCm 7.2.4).
 # GPU_PINNED_MIN_XFER_SIZE=1048576: HIP pinned-transfer floor used with mmap-experts.
 # HSA_DISABLE_COREDUMP_ON_EXCEPTION=1 plus ulimit -c 0 in strata-serve: no core dumps.
