@@ -17,6 +17,11 @@ RUN sh /tmp/add_openssh.sh && rm -f /tmp/add_openssh.sh
 COPY add_jupyterlab.sh /tmp/add_jupyterlab.sh
 RUN sh /tmp/add_jupyterlab.sh && rm -f /tmp/add_jupyterlab.sh
 
+# Common tools users of the previous Base had: vim, and pinned huggingface_hub (`hf` CLI), transformers, accelerate,
+# datasets, scikit-learn and ipywidgets, installed without changing anything already in the image (add_common.sh).
+COPY add_common.sh /tmp/add_common.sh
+RUN sh /tmp/add_common.sh && rm -f /tmp/add_common.sh
+
 # JupyterLab terminals start "$SHELL -l" and fall back to sh when SHELL is unset (no history, no tab completion).
 ENV SHELL=/bin/bash
 
