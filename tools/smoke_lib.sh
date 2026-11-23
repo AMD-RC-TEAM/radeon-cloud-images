@@ -44,3 +44,33 @@ openssh_baked() {
   rm -rf "$t"
   echo "openssh: $(ssh -V 2>&1 | head -1 || true) present, no baked host keys; launch-time install is skipped"
 }
+
+# ssh_keeps_image_env: an SSH session must see the image's python3 (e.g. /opt/venv/bin/python3), both for
+# `ssh host cmd` and for a fresh login shell, and must import torch when the image's python3 can. sshd runs
+# the way Radeon Cloud starts it (app/ssh_runtime.py): UsePAM no, PermitUserEnvironment no, one SetEnv line.
+ssh_keeps_image_env() {
+  if [ "$(id -u)" != 0 ]; then echo "ssh session PATH: skipped (smoke not running as root)"; return 0; fi
+  sshd_bin=$(command -v sshd 2>/dev/null || true); [ -n "$sshd_bin" ] || sshd_bin=/usr/sbin/sshd
+  want=$(command -v python3)
+  t=$(mktemp -d); port=2223
+  ssh-keygen -q -t ed25519 -N '' -f "$t/hostkey" >/dev/null
+  ssh-keygen -q -t ed25519 -N '' -f "$t/id" >/dev/null
+  cp "$t/id.pub" "$t/authorized_keys"; chmod 600 "$t/authorized_keys"
+  printf 'Port %s\nListenAddress 127.0.0.1\nHostKey %s/hostkey\nPidFile %s/sshd.pid\nUsePAM no\nPermitUserEnvironment no\nPasswordAuthentication no\nPermitRootLogin prohibit-password\nAuthorizedKeysFile %s/authorized_keys\nStrictModes no\nSetEnv RC_SMOKE=1\n' \
+    "$port" "$t" "$t" "$t" > "$t/sshd_config"
+  mkdir -p /run/sshd 2>/dev/null || true
+  "$sshd_bin" -f "$t/sshd_config" || { rm -rf "$t"; echo "FAIL: sshd did not start"; return 1; }
+  o="-p $port -i $t/id -o BatchMode=yes -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o LogLevel=ERROR"
+  for i in $(seq 1 20); do ssh $o root@127.0.0.1 true 2>/dev/null && break; sleep 0.5; done
+  rc=0
+  got=$(ssh $o root@127.0.0.1 'command -v python3' 2>&1) || true
+  login=$(ssh $o root@127.0.0.1 'env -i HOME=/root PATH=/usr/bin:/bin bash -l -c "command -v python3"' 2>&1) || true
+  [ "$got" = "$want" ] || { echo "FAIL: ssh host cmd python3 is '$got', image has '$want'"; rc=1; }
+  [ "$login" = "$want" ] || { echo "FAIL: ssh login shell python3 is '$login', image has '$want'"; rc=1; }
+  if python3 -c 'import torch' 2>/dev/null; then
+    ssh $o root@127.0.0.1 "python3 -c 'import torch'" || { echo "FAIL: import torch fails over ssh"; rc=1; }
+  fi
+  kill "$(cat "$t/sshd.pid")" 2>/dev/null || true; rm -rf "$t"
+  [ $rc = 0 ] && echo "ssh session env: python3 = $want and torch loads for ssh cmd and login shells"
+  return $rc
+}
