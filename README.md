@@ -17,7 +17,7 @@ A merged PR is built, smoke-tested on a Radeon W7900D GPU and released to users 
 
 | Path | Purpose |
 |---|---|
-| `images/<name>/Dockerfile` | The image: `FROM <public upstream image>:<tag>@sha256:<digest>`, then optional build steps. Never point `FROM` at a private registry. |
+| `images/<name>/Dockerfile` | The image: `FROM <public upstream image>:<tag>@sha256:<digest>`, then optional build steps. Use a public upstream image (exception today: `images/base` starts from a team-built image). |
 | `images/<name>/image.yaml` | Release settings: image name, picker row name, smoke profile, and which upstream tags the upgrade bot may propose. |
 | `images/<name>/smoke.sh` | Runs inside the image on one GPU and checks what users do with it. It must print `SMOKE PASS` as its last line. |
 | `images/<name>/add_jupyterlab.sh` | (most images) Installs a pinned JupyterLab without changing any package already in the image, so notebooks start fast. |
@@ -30,7 +30,7 @@ A merged PR is built, smoke-tested on a Radeon W7900D GPU and released to users 
 
 ## Check it locally before the PR
 
-You need Docker. The smoke test also needs an AMD GPU (gfx1100, for example a W7900D).
+You need Docker. The smoke test also needs an AMD GPU. Only gfx1100 (for example a W7900D) is smoke-tested.
 
 ```bash
 # 1. Validate the image files (under 1 s). Pass = prints the parsed settings and exits 0.
