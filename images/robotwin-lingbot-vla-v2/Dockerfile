@@ -65,13 +65,12 @@ COPY robotwin-env.sh /usr/local/bin/robotwin-env
 RUN chmod 0755 /usr/local/bin/robotwin-env && \
     ln -sf /usr/local/bin/robotwin-env /etc/profile.d/robotwin-env.sh
 
-RUN git init /opt/aiter && \
-    git -C /opt/aiter remote add origin https://github.com/ROCm/aiter.git && \
-    git -C /opt/aiter fetch --depth 1 origin "${AITER_COMMIT}" && \
-    git -C /opt/aiter checkout FETCH_HEAD && \
+ARG AITER_VERSION=0.1.1.dev1+g9bab8388c
+RUN python3 /tmp/fetch_src.py ROCm/aiter "${AITER_COMMIT}" /opt/aiter && \
     cd /opt/aiter && \
     sed -i '/flydsl==0.1.9.dev599/d' pyproject.toml && \
     GPU_ARCHS="${AITER_GPU_ARCHS}" AITER_USE_SYSTEM_TRITON=1 \
+    SETUPTOOLS_SCM_PRETEND_VERSION_FOR_AMD_AITER="${AITER_VERSION}" \
         /opt/robotwin-env/bin/python setup.py develop && \
     python3 /tmp/fetch_src.py Dao-AILab/flash-attention "${FLASH_ATTENTION_COMMIT}" /tmp/flash-attention && \
     cd /tmp/flash-attention && \
@@ -84,7 +83,8 @@ RUN git init /opt/aiter && \
     cd / && rm -rf /tmp/flash-attention
 
 RUN /opt/robotwin-env/bin/python -c 'from importlib.metadata import version; import aiter, flash_attn, triton; \
-assert version("flash-attn") == "2.8.4"; print("AITER", version("amd-aiter"), "Triton", triton.__version__)'
+assert version("flash-attn") == "2.8.4"; print("AITER", version("amd-aiter"), "Triton", triton.__version__)' && \
+    test "$(/opt/robotwin-env/bin/python -c 'from importlib.metadata import version; print(version("amd-aiter"))')" = "${AITER_VERSION}"
 
 COPY lingbot-vla-v2-rocm.patch robotwin-rocm-reproduction.patch xpolicylab-lerobot-v30.patch /tmp/robotwin-patches/
 RUN python3 /tmp/fetch_src.py RoboTwin-Platform/RoboTwin "${ROBOTWIN_COMMIT}" /RoboTwin && \

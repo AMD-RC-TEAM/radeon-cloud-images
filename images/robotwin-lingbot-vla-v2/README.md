@@ -2,7 +2,7 @@
 
 RoboTwin 2.0 inference, evaluation, LoRA training and full SFT for LingBot-VLA-v2 on Radeon Cloud W7900 GPUs.
 
-This image adapts the `docker/external-data` runtime in [RoboTwin-radeon-cloud](https://github.com/ZiguanWang/Robotwin-radeon-cloud). It pins the public ROCm PyTorch base by digest, the RoboTwin, LingBot-VLA-v2, AITER and upstream FlashAttention source commits, and the Python requirements. Four source trees are downloaded as fixed-commit snapshots from GitHub codeload; AITER retains a Git checkout because its package version comes from Git metadata. The three ROCm compatibility patches are included as top-level files. Models, simulation assets and datasets are read from the platform's read-only mount. The workflow scripts, training configuration and notebooks stay in the project repository instead of being duplicated in this image.
+This image adapts the `docker/external-data` runtime in [RoboTwin-radeon-cloud](https://github.com/ZiguanWang/Robotwin-radeon-cloud). It pins the public ROCm PyTorch base by digest, the RoboTwin, LingBot-VLA-v2, AITER and upstream FlashAttention source commits, and the Python requirements. All five source trees are downloaded as fixed-commit snapshots from GitHub codeload; AITER's package version is pinned explicitly because the snapshot has no Git metadata for `setuptools_scm`. The three ROCm compatibility patches are included as top-level files. Models, simulation assets and datasets are read from the platform's read-only mount. The workflow scripts, training configuration and notebooks stay in the project repository instead of being duplicated in this image.
 
 ## Quick start
 
