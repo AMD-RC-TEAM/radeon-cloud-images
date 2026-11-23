@@ -42,6 +42,9 @@ COPY requirements.txt torch-wheels.txt fetch.py /tmp/rc/
 #    installs it), then the Lingbot-VLA environment with every package at the validated version (--no-deps).
 #    The interpreter is downloaded and checked here (npmmirror first, then astral and GitHub, with retries), then installed by uv from
 #    that local copy, so it is byte-for-byte what uv installs.
+#    The amdsmi Python package is the base image's own (ROCm 7.2, AMD SMI 26.2, from /opt/rocm/share/amd_smi) instead of
+#    PyPI's newest one up to 7.2, which is 7.0.2: with this environment first on PATH the `amd-smi` command runs with its
+#    Python, and AMD SMI 26.2's command needs the bindings of its own release.
 # The build sets PIP_INDEX_URL to a PyPI mirror reachable from the build cluster; it is not kept in the image.
 ARG PIP_INDEX_URL=https://mirrors.aliyun.com/pypi/simple/
 #    (uv settings for the build only; ARGs are not kept in the image)
@@ -59,7 +62,10 @@ RUN python3 -m pip install --no-cache-dir --index-url "${PIP_INDEX_URL}" uv==0.1
     UV_PYTHON_INSTALL_MIRROR=file:///tmp/rc/pbs uv python install 3.11.14 --no-bin && rm -rf /tmp/rc/pbs && \
     uv venv /opt/venv/lingbotvla --python 3.11.14 && \
     uv pip install --python /opt/venv/lingbotvla/bin/python --no-deps --index-url "${PIP_INDEX_URL}" \
-        -r /tmp/rc/requirements.txt
+        -r /tmp/rc/requirements.txt && \
+    cp -r /opt/rocm/share/amd_smi /tmp/rc/amd_smi && \
+    uv pip install --python /opt/venv/lingbotvla/bin/python --no-deps --index-url "${PIP_INDEX_URL}" /tmp/rc/amd_smi && \
+    rm -rf /tmp/rc/amd_smi
 
 # 3. The PyTorch ROCm 7.2 wheels (torch-wheels.txt: file names and sha256), from a mirror of download.pytorch.org
 #    (default: NJU, which RLinf's installer also uses in China, ~40x faster there for the 6.2 GB torch wheel), then
@@ -112,24 +118,34 @@ RUN V=/opt/venv/lingbotvla && L=$V/lingbot-vla && M=$L/lingbotvla/models/vla/vis
 
 # 5. RLinf and RoboTwin at pinned commits. RoboTwin's assets (background_texture, objects, embodiments) are links into
 #    the mounted volume; RoboTwin only reads them (the workshop uses the mplib planner, so no curobo configs are
-#    generated into them).
+#    generated into them). RoboTwin asks SAPIEN's ray tracer for the OIDN denoiser, but SAPIEN bundles only OIDN's CUDA
+#    device: on AMD it fails for every camera it creates (two error lines each time, ~14,500 in one workshop run) and
+#    the images are rendered without it. With the denoiser set to "none" the images are the same, pixel for pixel.
 ARG RLINF_COMMIT=58d1b9abd6c65dd2dce7fdf57afedfdd9273ef9c
 ARG ROBOTWIN_COMMIT=dca9ec682688821c42944eacd7f5dd9bfb15396f
 RUN python3 /tmp/rc/fetch.py src RLinf/RLinf ${RLINF_COMMIT} /opt/RLinf && \
     python3 /tmp/rc/fetch.py src RoboTwin-Platform/RoboTwin ${ROBOTWIN_COMMIT} /opt/robotwin && \
+    sed -i 's/set_ray_tracing_denoiser("oidn")/set_ray_tracing_denoiser("none")/' /opt/robotwin/envs/_base_task.py && \
+    grep -q 'set_ray_tracing_denoiser("none")' /opt/robotwin/envs/_base_task.py && \
     for d in background_texture objects embodiments; do ln -s /models/rlinf-workshop/robotwin-assets/$d /opt/robotwin/assets/$d; done && \
     mkdir -p ${HF_HOME} /workspace && rm -rf /tmp/rc
 
 # The Lingbot-VLA environment first on PATH: `python` and `jupyter` (JupyterLab 4.6.6, in requirements.txt) are that
 # environment's, which passes Radeon Cloud's launch-time JupyterLab check. JupyterLab terminals start "$SHELL -l".
+# PyTorch's own libdrm_amdgpu looks for amdgpu.ids (the GPU product names) only in AMDGPU_ASIC_ID_TABLE_PATHS and
+# /opt/amdgpu/share/libdrm; pointed to the copy in the torch wheel, HIP start-up no longer prints
+# "(null): No such file or directory" once per GPU, and the GPU's name is "AMD Radeon Pro W7900D".
 ENV VIRTUAL_ENV=/opt/venv/lingbotvla \
     PATH=/opt/venv/lingbotvla/bin:${PATH} \
-    SHELL=/bin/bash
+    SHELL=/bin/bash \
+    AMDGPU_ASIC_ID_TABLE_PATHS=/opt/venv/lingbotvla/lib/python3.11/site-packages/torch/share/libdrm
 RUN command -v jupyter && python -c 'import importlib.metadata as m, sys; \
 v = lambda n: tuple(map(int, m.version(n).split(".")[:2])); \
 assert (3, 10) <= sys.version_info[:2] <= (3, 12) and (2, 14) <= v("jupyter_server") < (3, 0) and (4, 2) <= v("jupyterlab") < (5, 0); \
-import torch, triton, sapien, mplib, flash_attn, lerobot, lingbotvla; \
-assert torch.__version__ == "2.11.0+rocm7.2" and triton.__version__ == "3.5.1", (torch.__version__, triton.__version__)'
+import os, torch, triton, sapien, mplib, flash_attn, lerobot, lingbotvla, amdsmi.amdsmi_interface as smi; \
+assert torch.__version__ == "2.11.0+rocm7.2" and triton.__version__ == "3.5.1", (torch.__version__, triton.__version__); \
+assert m.version("amdsmi").startswith("26.2.") and hasattr(smi, "amdsmi_get_node_handle"), m.version("amdsmi"); \
+assert os.path.isfile(os.environ["AMDGPU_ASIC_ID_TABLE_PATHS"] + "/amdgpu.ids")'
 
 # No CMD/ENTRYPOINT of its own: the platform starts instances with its own command (the base image's CMD is bash).
 WORKDIR /workspace
