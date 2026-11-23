@@ -1,12 +1,25 @@
 # RoboTwin · LingBot-VLA-v2
 
-RoboTwin 2.0 inference, evaluation, LoRA training and full SFT for LingBot-VLA-v2 on Radeon Cloud W7900 GPUs.
+**Purpose line (English, one sentence; the start of the catalog description):**
+RoboTwin 2.0 inference, closed-loop evaluation, LoRA training and full SFT for LingBot-VLA-v2 on Radeon Cloud W7900 GPUs.
 
-This image adapts the `docker/external-data` runtime in [RoboTwin-radeon-cloud](https://github.com/ZiguanWang/Robotwin-radeon-cloud). It pins the public ROCm PyTorch base by digest, the RoboTwin, LingBot-VLA-v2, AITER and upstream FlashAttention source commits, and the Python requirements. All five source trees are downloaded as fixed-commit snapshots from GitHub codeload; AITER's package version is pinned explicitly because the snapshot has no Git metadata for `setuptools_scm`. The three ROCm compatibility patches are included as top-level files. Models, simulation assets and datasets are read from the platform's read-only mount. The workflow scripts, training configuration and notebooks stay in the project repository instead of being duplicated in this image.
+This image provides the ROCm runtime and includes the notebooks, workflow scripts, training configuration and three
+compatibility patches from [RoboTwin-radeon-cloud at commit `f1683c77`](https://github.com/ZiguanWang/Robotwin-radeon-cloud/tree/f1683c77a0e1cea06f9beb03ba0a6c9e4261773b).
+The project snapshot is stored at `/RoboTwin/RoboTwin-radeon-cloud` and its patches are applied during the build.
+The `requirements.txt` is pinned in this image directory; the patches come from the project snapshot. Model weights,
+simulation assets and demonstrations are read from a separate, read-only platform mount; none are baked into the image.
+
+| Component | Pinned source or runtime path |
+| --- | --- |
+| Base | `rocm/pytorch:rocm7.2.1_ubuntu24.04_py3.12_pytorch_release_2.9.1` at the digest in `Dockerfile` |
+| Python and JupyterLab | `/opt/robotwin-env`: Python 3.12, JupyterLab 4.6.3; ROCm PyTorch 2.9.1 remains in the base `/opt/venv` |
+| RoboTwin, XPolicyLab, LingBot-VLA-v2, AITER, FlashAttention and the project repository | Full commits in `Dockerfile`, downloaded as source snapshots and patched where needed |
 
 ## Quick start
 
-Select this image with a W7900 GPU instance, **Persistent /workspace**, and the **Devzone** model mount. The mount must contain `/models/robotwin-persistent/{assets,data,models}`. Copy the matching `RoboTwin-radeon-cloud` project tree to `/workspace/RoboTwin-radeon-cloud` before running its scripts or notebooks. In a terminal:
+For a manual Radeon Cloud instance, select this image, persistent `/workspace`, and the Devzone model mount. The mount
+must expose `/models/robotwin-persistent/{assets,data,models}`. The matching project checkout is already in the image.
+In a terminal:
 
 ```bash
 test -f /RoboTwin/assets/objects/objaverse/list.json
@@ -15,26 +28,64 @@ test -f /RoboTwin/experiments/lingbot_vla_v2_6b_robotwin/models/robbyant_lingbot
 test -f /RoboTwin/experiments/lingbot_vla_v2_6b_robotwin/scripts/eval/run_paired_eval.py
 test -f /RoboTwin/experiments/lingbot_vla_v2_6b_robotwin/training/lingbotvla_cli.yaml
 python -c 'import sys, torch, jupyterlab; print(sys.executable, torch.__version__, jupyterlab.__version__)'
+mkdir -p /workspace/RoboTwin-notebooks
+cp -a /RoboTwin/RoboTwin-radeon-cloud/notebooks/. /workspace/RoboTwin-notebooks/
 ```
 
-Open the notebooks under `/workspace/RoboTwin-radeon-cloud/notebooks` in JupyterLab. The image links `/RoboTwin/experiments/lingbot_vla_v2_6b_robotwin/scripts` and its training YAML to the project tree in `/workspace`; the notebooks use these paths. Keep the complete project tree because the notebooks call scripts from several subdirectories. `python` and `jupyter` use `/opt/robotwin-env`, while ROCm PyTorch remains in the base `/opt/venv`. Source `/usr/local/bin/robotwin-env` when selecting GPUs for a shell job. Training output and Hugging Face cache go under `/workspace/runtime`.
+Open `RoboTwin-notebooks/lora_workshop.ipynb` or `RoboTwin-notebooks/sft_workshop.ipynb` in JupyterLab. The image links
+RoboTwin's experiment script directory and training YAML to the pinned project snapshot. Source
+`/usr/local/bin/robotwin-env` when selecting GPUs for a shell job. Outputs and the Hugging Face cache belong under
+`/workspace/runtime`.
 
-The mount layout matches the source repository's `external-data` image:
-
-| Platform mount | Runtime path |
+| Read-only mount | Path used by RoboTwin |
 | --- | --- |
 | `/models/robotwin-persistent/assets` | `/RoboTwin/assets` |
 | `/models/robotwin-persistent/data` | `/RoboTwin/data` |
 | `/models/robotwin-persistent/models` | `/RoboTwin/experiments/lingbot_vla_v2_6b_robotwin/models` |
 
-The image has no argument-dispatching entrypoint; Radeon Cloud supplies the launch command. Outside the platform, mount both the read-only data and the project repository at the paths above and run `bash` or `jupyter lab` explicitly.
+The image adds no argument-dispatching `ENTRYPOINT` or `CMD`; Radeon Cloud supplies the launch command. Outside the
+platform, mount the read-only data at the same path and run `bash` or `jupyter lab` explicitly.
 
 ## What fits on disk
 
-The image includes patched RoboTwin and LingBot-VLA-v2 source and one Python environment for model code and JupyterLab, but no model weights, simulation assets, demonstrations, notebooks or project scripts. The Devzone mount holds the 50 `demo_clean` tasks, converted LeRobot data, RoboTwin simulation assets, and LingBot-VLA-v2 model files. On the current mount these occupy about 105 GB combined; keep them off the persistent `/workspace` volume. A full SFT checkpoint can be about 70 GB, so check free space under `/workspace/runtime` before training. The full depth and video teacher configuration targets 4 or 8 W7900 GPUs with 48 GiB each; the CI smoke uses one GPU.
+The image is approximately 49 GB uncompressed in a local Docker build, including the ROCm PyTorch base and model
+runtime. The project code and notebooks are small compared with the image. The prepared Devzone mount is separate:
+approximately 16 GB of simulation assets, 38 GB of demonstrations
+and converted data, and 51 GB of models (about 105 GB total). The source project's `scripts/data/prepare_external_data.sh`
+prepares that external tree. The one-GPU LoRA workshop and four-GPU full SFT workshop need different instance sizes;
+full SFT needs at least 100 GiB of free persistent output space. A full checkpoint can occupy about 70 GB under
+`/workspace/runtime`. Check available space before training.
 
-## Source and verification
+## How it is built
 
-The requirements and patches in this directory reflect the local `RoboTwin-radeon-cloud` working tree on 2026-11-23. The base image is pinned at `sha256:96a2fb24dec9896e2f8238178f0c49d0dcc4c7dcc597be09e4564316bd86d191`; upstream source commits are recorded in the Dockerfile. CI checks JupyterLab in the model environment, gfx1100, a ROCm PyTorch operation, a small SAPIEN physics step, the mount-path links and a notebook server. The CI worker does not mount Devzone data, so it cannot prove that the external project scripts, assets or model weights execute together. A launch with the read-only mount and project tree is required before release.
+1. `Dockerfile` starts from a public ROCm PyTorch image pinned by tag and digest. It adds the system libraries used by
+   SAPIEN/Vulkan, source builds and JupyterLab, without adding model weights or datasets.
+2. `requirements.txt` pins the model, evaluator and JupyterLab packages. The Dockerfile installs the pinned build
+   tools first, then installs the full list with `--no-deps --no-build-isolation` into `/opt/robotwin-env`. ROCm PyTorch
+   remains in the base `/opt/venv`, and the build checks that it has not been replaced.
+3. `fetch_src.py` downloads full-commit source snapshots of AITER, upstream FlashAttention, RoboTwin, XPolicyLab,
+   LingBot-VLA-v2 and the project repository. The Dockerfile applies the three patches from that pinned project
+   snapshot, installs the patched Python sources and checks key imports. AITER's package version is explicitly pinned
+   because a codeload snapshot has no Git metadata for `setuptools_scm`.
+4. The final layers link RoboTwin's asset, data and model paths to `/models/robotwin-persistent`, and link its scripts
+   and training YAML to the included project snapshot. The platform supplies the launch command.
 
-A local build on 2026-11-23 passed using the official PyPI index. With the current read-only mount and project tree, a local gfx1201 container passed a PyTorch GPU operation, a SAPIEN physics step and the JupyterLab server check after selecting the GPU's PCI-form `DRI_PRIME` value. This does not cover model inference or training, or the CI worker's gfx1100 build and smoke.
+## Smoke
+
+`smoke.sh` runs on one gfx1100 W7900D after the CI build. It checks the JupyterLab launch fast path, ROCm PyTorch on
+the GPU, a small SAPIEN physics step, the three links into `/models/robotwin-persistent`, and a Jupyter server
+answering HTTP. The standard CI worker does not mount Devzone data, so this smoke does not check mounted file
+contents, load model weights, run a full RoboTwin scene, or perform training. A launch with the read-only mount is
+needed to verify those paths before release.
+
+## Release and catalog
+
+1. The PR `validate` check parses the image and release settings. The `smoke` check builds with Kaniko and runs the
+   checks above; both must pass before merging.
+2. After a green build and smoke plus code-owner approval, merging releases `rc/robotwin-lingbot-vla-v2:rc-current`;
+   the prior digest remains available as `rc-prev`.
+3. The versions probe reports ROCm, Python and PyTorch. RoboTwin and LingBot-VLA-v2 source commits are pinned in the
+   Dockerfile; this image adds no shared `versions_probe.py` change.
+4. A new catalog row and Gallery template need an owner decision. The proposed workshop flow is a Gallery template
+   pointing at a fixed-version row, with the GPU size, Devzone mount and persistent-space requirement in its
+   description. rc-ops can verify a launch with the read-only mount on Global Test before wider availability.

@@ -28,6 +28,7 @@ ENV DEBIAN_FRONTEND=noninteractive \
 
 ARG PIP_INDEX_URL=
 ARG ROBOTWIN_COMMIT=e154702de28cac4b9bfe0299044303f507236bb3
+ARG ROBOTWIN_RADEON_CLOUD_COMMIT=f1683c77a0e1cea06f9beb03ba0a6c9e4261773b
 ARG XPOLICYLAB_COMMIT=c37109c500be67d0dea6b36bf7337bbd26e763cd
 ARG LINGBOT_VLA_COMMIT=951475ae1b1d87553e7dc47c97b53a3d695c0d13
 ARG AITER_COMMIT=9bab8388c35936814a659b4ebd245c491e1b940a
@@ -86,23 +87,25 @@ RUN /opt/robotwin-env/bin/python -c 'from importlib.metadata import version; imp
 assert version("flash-attn") == "2.8.4"; print("AITER", version("amd-aiter"), "Triton", triton.__version__)' && \
     test "$(/opt/robotwin-env/bin/python -c 'from importlib.metadata import version; print(version("amd-aiter"))')" = "${AITER_VERSION}"
 
-COPY lingbot-vla-v2-rocm.patch robotwin-rocm-reproduction.patch xpolicylab-lerobot-v30.patch /tmp/robotwin-patches/
 RUN python3 /tmp/fetch_src.py RoboTwin-Platform/RoboTwin "${ROBOTWIN_COMMIT}" /RoboTwin && \
+    python3 /tmp/fetch_src.py ZiguanWang/Robotwin-radeon-cloud "${ROBOTWIN_RADEON_CLOUD_COMMIT}" \
+        /RoboTwin/RoboTwin-radeon-cloud && \
+    PATCHES=/RoboTwin/RoboTwin-radeon-cloud/patches && \
     python3 /tmp/fetch_src.py XPolicyLab/XPolicyLab "${XPOLICYLAB_COMMIT}" /RoboTwin/XPolicyLab && \
-    git -C /RoboTwin apply --check /tmp/robotwin-patches/robotwin-rocm-reproduction.patch && \
-    git -C /RoboTwin apply /tmp/robotwin-patches/robotwin-rocm-reproduction.patch && \
-    git -C /RoboTwin/XPolicyLab apply --check /tmp/robotwin-patches/xpolicylab-lerobot-v30.patch && \
-    git -C /RoboTwin/XPolicyLab apply /tmp/robotwin-patches/xpolicylab-lerobot-v30.patch && \
+    git -C /RoboTwin apply --check "$PATCHES/robotwin-rocm-reproduction.patch" && \
+    git -C /RoboTwin apply "$PATCHES/robotwin-rocm-reproduction.patch" && \
+    git -C /RoboTwin/XPolicyLab apply --check "$PATCHES/xpolicylab-lerobot-v30.patch" && \
+    git -C /RoboTwin/XPolicyLab apply "$PATCHES/xpolicylab-lerobot-v30.patch" && \
     python3 /tmp/fetch_src.py robbyant/lingbot-vla-v2 "${LINGBOT_VLA_COMMIT}" \
         /RoboTwin/experiments/lingbot_vla_v2_6b_robotwin/source/lingbot-vla-v2 && \
     git -C /RoboTwin/experiments/lingbot_vla_v2_6b_robotwin/source/lingbot-vla-v2 \
-        apply --check /tmp/robotwin-patches/lingbot-vla-v2-rocm.patch && \
+        apply --check "$PATCHES/lingbot-vla-v2-rocm.patch" && \
     git -C /RoboTwin/experiments/lingbot_vla_v2_6b_robotwin/source/lingbot-vla-v2 \
-        apply /tmp/robotwin-patches/lingbot-vla-v2-rocm.patch && \
+        apply "$PATCHES/lingbot-vla-v2-rocm.patch" && \
     /opt/robotwin-env/bin/python -m pip install --no-deps --no-build-isolation \
         -e /RoboTwin/XPolicyLab \
         -e /RoboTwin/experiments/lingbot_vla_v2_6b_robotwin/source/lingbot-vla-v2 && \
-    rm -rf /tmp/robotwin-patches /tmp/fetch_src.py
+    rm -f /tmp/fetch_src.py
 
 RUN /opt/robotwin-env/bin/python -m py_compile /RoboTwin/scripts/eval_policy_xpolicylab.py && \
     test -f /RoboTwin/XPolicyLab/XPolicyLab.py
@@ -120,9 +123,9 @@ RUN rm -rf \
     ln -s /models/robotwin-persistent/models \
         /RoboTwin/experiments/lingbot_vla_v2_6b_robotwin/models && \
     ln -s /workspace/runtime/eval_result /RoboTwin/eval_result && \
-    ln -s /workspace/RoboTwin-radeon-cloud/scripts \
+    ln -s /RoboTwin/RoboTwin-radeon-cloud/scripts \
         /RoboTwin/experiments/lingbot_vla_v2_6b_robotwin/scripts && \
-    ln -s /workspace/RoboTwin-radeon-cloud/configs/lingbot_vla_v2_6b_robotwin/lingbotvla_cli.yaml \
+    ln -s /RoboTwin/RoboTwin-radeon-cloud/configs/lingbot_vla_v2_6b_robotwin/lingbotvla_cli.yaml \
         /RoboTwin/experiments/lingbot_vla_v2_6b_robotwin/training/lingbotvla_cli.yaml
 
 WORKDIR /RoboTwin

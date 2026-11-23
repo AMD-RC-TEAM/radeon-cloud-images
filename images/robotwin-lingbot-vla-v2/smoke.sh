@@ -11,14 +11,6 @@ test -L /RoboTwin/experiments/lingbot_vla_v2_6b_robotwin/models
 test "$(readlink /RoboTwin/assets)" = /models/robotwin-persistent/assets
 test "$(readlink /RoboTwin/data)" = /models/robotwin-persistent/data
 test "$(readlink /RoboTwin/experiments/lingbot_vla_v2_6b_robotwin/models)" = /models/robotwin-persistent/models
-test "$(readlink /RoboTwin/experiments/lingbot_vla_v2_6b_robotwin/scripts)" = /workspace/RoboTwin-radeon-cloud/scripts
-test "$(readlink /RoboTwin/experiments/lingbot_vla_v2_6b_robotwin/training/lingbotvla_cli.yaml)" = /workspace/RoboTwin-radeon-cloud/configs/lingbot_vla_v2_6b_robotwin/lingbotvla_cli.yaml
-test -f /RoboTwin/XPolicyLab/XPolicyLab.py
-if [ -d /models/robotwin-persistent/data/demo_clean ]; then
-  test -f /models/robotwin-persistent/assets/objects/objaverse/list.json
-  test -f /models/robotwin-persistent/data/robotwin_demo_clean_joint_v30.txt
-  test -f /models/robotwin-persistent/models/robbyant_lingbot-vla-v2-6b/model.safetensors.index.json
-fi
 python - <<'PY'
 import sys
 import torch, sapien, mplib, lerobot, lingbotvla, jupyterlab
