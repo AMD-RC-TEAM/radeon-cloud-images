@@ -11,6 +11,12 @@ test -L /RoboTwin/experiments/lingbot_vla_v2_6b_robotwin/models
 test "$(readlink /RoboTwin/assets)" = /models/robotwin-persistent/assets
 test "$(readlink /RoboTwin/data)" = /models/robotwin-persistent/data
 test "$(readlink /RoboTwin/experiments/lingbot_vla_v2_6b_robotwin/models)" = /models/robotwin-persistent/models
+# The notebook comes from the template's repository clone, not from the image.
+test ! -e /RoboTwin/RoboTwin-radeon-cloud/notebooks
+test ! -e /workspace/RoboTwin-notebooks
+test -f /RoboTwin/RoboTwin-radeon-cloud/configs/lingbot_vla_v2_6b_robotwin/lingbotvla_cli.yaml
+# Runtime directories are created when the environment is sourced, not baked under /workspace.
+( . /usr/local/bin/robotwin-env && test -d "$HF_HOME" && test -d /workspace/runtime/eval_result )
 python - <<'PY'
 import sys
 import torch, sapien, mplib, lerobot, lingbotvla, jupyterlab

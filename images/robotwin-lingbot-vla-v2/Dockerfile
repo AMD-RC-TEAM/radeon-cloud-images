@@ -35,8 +35,6 @@ ARG AITER_COMMIT=9bab8388c35936814a659b4ebd245c491e1b940a
 ARG FLASH_ATTENTION_COMMIT=9c6d9297e5d43653c2ea5837ed9e0d10f76ed231
 ARG AITER_GPU_ARCHS=gfx1100;gfx1201
 
-RUN mkdir -p /workspace/runtime/tmp /workspace/runtime/.cache/huggingface
-
 RUN apt-get update -qq && \
     apt-get install -y -qq --no-install-recommends \
         ca-certificates git git-lfs curl wget ffmpeg \
@@ -113,10 +111,10 @@ RUN /opt/robotwin-env/bin/python -m py_compile /RoboTwin/scripts/eval_policy_xpo
 RUN rm -rf \
         /RoboTwin/assets \
         /RoboTwin/data \
-        /RoboTwin/experiments/lingbot_vla_v2_6b_robotwin/models && \
+        /RoboTwin/experiments/lingbot_vla_v2_6b_robotwin/models \
+        /RoboTwin/RoboTwin-radeon-cloud/notebooks && \
     mkdir -p \
         /models/robotwin-persistent \
-        /workspace/runtime \
         /RoboTwin/experiments/lingbot_vla_v2_6b_robotwin/training && \
     ln -s /models/robotwin-persistent/assets /RoboTwin/assets && \
     ln -s /models/robotwin-persistent/data /RoboTwin/data && \

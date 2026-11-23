@@ -3,9 +3,12 @@
 **Purpose line (English, one sentence; the start of the catalog description):**
 RoboTwin 2.0 inference, closed-loop evaluation, LoRA training and full SFT for LingBot-VLA-v2 on Radeon Cloud W7900 GPUs.
 
-This image provides the ROCm runtime and includes the notebooks, workflow scripts, training configuration and three
+This image provides the ROCm runtime and includes the workflow scripts, training configuration and three
 compatibility patches from [RoboTwin-radeon-cloud at commit `f1683c77`](https://github.com/ZiguanWang/Robotwin-radeon-cloud/tree/f1683c77a0e1cea06f9beb03ba0a6c9e4261773b).
-The project snapshot is stored at `/RoboTwin/RoboTwin-radeon-cloud` and its patches are applied during the build.
+The project snapshot is stored at `/RoboTwin/RoboTwin-radeon-cloud` (without its `notebooks/`) and its patches are applied
+during the build. The workshop notebooks are not in the image: the Radeon Cloud template clones
+[RoboTwin-radeon-cloud](https://github.com/ZiguanWang/Robotwin-radeon-cloud) into `/workspace` and opens
+`notebooks/sft_workshop.ipynb`, so notebook updates need no image rebuild.
 The `requirements.txt` is pinned in this image directory; the patches come from the project snapshot. Model weights,
 simulation assets and demonstrations are read from a separate, read-only platform mount; none are baked into the image.
 
@@ -28,14 +31,13 @@ test -f /RoboTwin/experiments/lingbot_vla_v2_6b_robotwin/models/robbyant_lingbot
 test -f /RoboTwin/experiments/lingbot_vla_v2_6b_robotwin/scripts/eval/run_paired_eval.py
 test -f /RoboTwin/experiments/lingbot_vla_v2_6b_robotwin/training/lingbotvla_cli.yaml
 python -c 'import sys, torch, jupyterlab; print(sys.executable, torch.__version__, jupyterlab.__version__)'
-mkdir -p /workspace/RoboTwin-notebooks
-cp -a /RoboTwin/RoboTwin-radeon-cloud/notebooks/. /workspace/RoboTwin-notebooks/
 ```
 
-Open `RoboTwin-notebooks/lora_workshop.ipynb` or `RoboTwin-notebooks/sft_workshop.ipynb` in JupyterLab. The image links
+Launch from the workshop template to get the notebooks (`notebooks/sft_workshop.ipynb`, `notebooks/lora_workshop.ipynb`)
+in `/workspace`; for a manual instance, clone the repository there. The image links
 RoboTwin's experiment script directory and training YAML to the pinned project snapshot. Source
-`/usr/local/bin/robotwin-env` when selecting GPUs for a shell job. Outputs and the Hugging Face cache belong under
-`/workspace/runtime`.
+`/usr/local/bin/robotwin-env` when selecting GPUs for a shell job; it also creates `/workspace/runtime`, where outputs
+and the Hugging Face cache belong.
 
 | Read-only mount | Path used by RoboTwin |
 | --- | --- |
@@ -49,7 +51,7 @@ platform, mount the read-only data at the same path and run `bash` or `jupyter l
 ## What fits on disk
 
 The image is approximately 49 GB uncompressed in a local Docker build, including the ROCm PyTorch base and model
-runtime. The project code and notebooks are small compared with the image. The prepared Devzone mount is separate:
+runtime. The project code is small compared with the image. The prepared Devzone mount is separate:
 approximately 16 GB of simulation assets, 38 GB of demonstrations
 and converted data, and 51 GB of models (about 105 GB total). The source project's `scripts/data/prepare_external_data.sh`
 prepares that external tree. The one-GPU LoRA workshop and four-GPU full SFT workshop need different instance sizes;

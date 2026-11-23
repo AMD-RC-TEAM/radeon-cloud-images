@@ -8,6 +8,10 @@ export FLASH_ATTENTION_TRITON_AMD_ENABLE="${FLASH_ATTENTION_TRITON_AMD_ENABLE:-T
 export HF_HOME="${HF_HOME:-/workspace/runtime/.cache/huggingface}"
 export TMPDIR="${TMPDIR:-/workspace/runtime/tmp}"
 
+# /workspace is the platform's volume, so nothing under it is baked into the image.
+# Create the runtime directories here; eval_result is the target of /RoboTwin/eval_result.
+mkdir -p "${HF_HOME}" "${TMPDIR}" /workspace/runtime/eval_result 2>/dev/null || true
+
 # ROCm compute visibility and Mesa/Vulkan render visibility are independent.
 # The caller supplies HIP_VISIBLE_DEVICES and, for same-model GPUs, a PCI-form
 # DRI_PRIME value. Do not let inherited compute masks filter a second time.
