@@ -1,0 +1,7 @@
+# RoboTwin LingBot-VLA-v2 inference, evaluation, LoRA and full SFT with externally mounted data.
+name: robotwin-lingbot-vla-v2
+rc_repo: rc/robotwin-lingbot-vla-v2
+catalog_row: "RoboTwin · LingBot-VLA-v2"
+smoke: robotwin-lingbot-vla-v2
+upstream:
+  tag_regex: '^rocm7\.2\.1_ubuntu24\.04_py3\.12_pytorch_release_2\.9\.1$'
