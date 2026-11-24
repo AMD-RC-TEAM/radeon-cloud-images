@@ -60,4 +60,5 @@ stop
 # The hk-dsl README quick start on this image (pip install hk-dsl && vllm serve Qwen/Qwen3-8B, one completion):
 # guards the 11-13 regression where hk's plugin pulled aiter into the engine on gfx1100.
 (cd "$(mktemp -d)" && HK_VERSION=0.9.21 bash "$(dirname "$0")/hk_readme_smoke.sh")
+torch_gemm_floor   # fp32/bf16 matmul speed; this torch build already uses rocBLAS on gfx1100, fail if an upgrade changes that
 echo "SMOKE PASS"

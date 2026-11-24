@@ -53,4 +53,5 @@ if python3 -c 'import jupyterlab' 2>/dev/null; then
 else
   echo "jupyterlab not in image (the RC launcher provides it); skipped"
 fi
+torch_gemm_floor   # fp32/bf16 matmul speed with the image defaults (TORCH_BLAS_PREFER_HIPBLASLT=0)
 echo "SMOKE PASS"

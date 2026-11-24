@@ -14,4 +14,5 @@ python3 -c 'import transformers, datasets, accelerate, sklearn, ipywidgets, hugg
 hf --help >/dev/null
 command -v vim >/dev/null
 python3 -c 'import torch; assert torch.cuda.is_available(); x = torch.randn(1024, 1024, device="cuda", dtype=torch.float16); print("torch", torch.__version__, "matmul ok", float((x @ x).float().abs().mean()) > 0)'
+torch_gemm_floor   # fp32/bf16 matmul speed with the image defaults (TORCH_BLAS_PREFER_HIPBLASLT=0)
 echo "SMOKE PASS"
