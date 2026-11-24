@@ -66,6 +66,9 @@ docker run --device /dev/kfd --device /dev/dri --group-add video --group-add ren
 - **Data volume:** ~33 GB, read-only (above).
 - **Workspace:** the notebooks come from the workshop repository; a run writes ~15 MB of logs and evaluation videos
   to `/workspace/rlinf_workshop`.
+- **`/tmp`:** on Radeon Cloud it is a 4 GB tmpfs, too small for the ~3 GB of temporary GPU-compiler (comgr) files that
+  the four training workers write at start-up. The notebook therefore sets `TMPDIR` and `RAY_TMPDIR` to
+  `/workspace/.tmp` for the training run; `/tmp` stays nearly empty.
 
 ## How it is built
 
@@ -77,7 +80,7 @@ pinned sources only:
 | --- | --- | --- |
 | System packages | [`apt-packages.txt`](apt-packages.txt): the 60 packages the RLinf image installs (dependencies resolved by apt) | Ubuntu archive (`APT_MIRROR`, default `mirrors.aliyun.com`) |
 | Python 3.11.14 | python-build-standalone 20260211, sha256 | `registry.npmmirror.com` (a mirror of the GitHub releases), then `releases.astral.sh`, then GitHub Releases |
-| Python packages | [`requirements.txt`](requirements.txt): 326 exact versions, installed with `--no-deps` | `PIP_INDEX_URL` |
+| Python packages | [`requirements.txt`](requirements.txt): 325 exact versions, installed with `--no-deps` | `PIP_INDEX_URL` |
 | PyTorch ROCm 7.2 wheels | [`torch-wheels.txt`](torch-wheels.txt): torch, torchvision, triton, pytorch-triton-rocm, triton-rocm, by file name and sha256 | `TORCH_WHEELS_MIRROR` (default the NJU mirror), then download.pytorch.org |
 | flash-attn 2.8.3 for ROCm 7.2 | RLinf's prebuilt wheel, sha256 | GitHub Releases, through `gh-proxy.com` first (`GITHUB_PROXY`), then github.com |
 | Lingbot-VLA (+ lingbot-depth, MoGe), LeRobot, RLinf, RoboTwin | commits | `codeload.github.com` ([`fetch.py`](fetch.py), with retries) |
@@ -89,6 +92,18 @@ order of `torch-wheels.txt`, which reproduces the validated environment's `trito
 RLinf's patches for RoboTwin on AMD (SAPIEN's URDF loader, mplib's planner), and sets the RADV Vulkan driver and
 flash-attention's Triton AMD backend as `ENV`, so that Jupyter kernels get them too.
 
+Three more settings keep the tools and the logs clean on AMD:
+
+- **`amd-smi` works as typed.** The environment's `amdsmi` Python package is the base image's own (AMD SMI 26.2, from
+  `/opt/rocm/share/amd_smi`) instead of PyPI's newest one up to ROCm 7.2, which is 7.0.2: with the environment first on
+  `PATH`, the `amd-smi` command runs with its Python and needs the bindings of its own release.
+- **No denoiser in RoboTwin's cameras.** RoboTwin asks SAPIEN's ray tracer for the OIDN denoiser, whose bundled build
+  is CUDA-only; on AMD it failed for every camera (two error lines each time, ~14,500 per workshop run) and the images
+  were rendered without it. The Dockerfile sets it to `"none"`; the images are the same, pixel for pixel.
+- **`AMDGPU_ASIC_ID_TABLE_PATHS`** points PyTorch's own `libdrm_amdgpu` to the `amdgpu.ids` in the torch wheel, so HIP
+  start-up no longer prints `(null): No such file or directory` once per GPU, and the GPU's name is
+  "AMD Radeon Pro W7900D".
+
 The first CI build of this image (with the RoboTwin assets still inside) took ~40 minutes in Kaniko.
 
 ## Smoke
@@ -97,27 +112,35 @@ The first CI build of this image (with the RoboTwin assets still inside) took ~4
 gfx1100, a bf16 matmul in PyTorch, Triton 3.5.1 and the RADV/flash-attention settings; the asset links and that RLinf's
 RoboTwin environment imports. When the data volume is mounted at `/models/rlinf-workshop`, it also builds two RoboTwin
 `place_shoe` environments from RLinf's own workshop config, resets them (scene setup and rendering of the head and
-wrist cameras in SAPIEN/Vulkan) and steps them; without the volume it says so and skips that part. It downloads nothing.
-SAPIEN's "Failed to initialize denoiser" lines and a curobo `ImportError` traceback in its output are expected
-(CUDA-only features that the workshop does not use).
+wrist cameras in SAPIEN/Vulkan) and steps them; without the volume it says so and skips that part. It also runs
+`amd-smi version`, checks that HIP start-up prints no `(null): No such file or directory` and shows the GPU's name, and
+that the RoboTwin environments print no "Failed to initialize denoiser". It downloads nothing. A curobo `ImportError`
+traceback in its output is expected (a CUDA-only planner that the workshop does not use).
 
 ## Validation
 
-The environment this Dockerfile reproduces was validated on a W7900D server with the platform's limits imitated
-(`--cpus=64 --memory=200g --shm-size=64g`, the models with only the files above, notebooks in `/workspace`): the
-workshop notebook ran its 40 steps, the first evaluation (after step 10) arrived 17:46 after launch, the whole notebook
-took 54:25, and the evaluation success rates after steps 10/20/30/40 were 0.97/0.81/0.97/0.94 (32 episodes each); peak
-memory 165 GB (including page cache), `/dev/shm` use 0.2 GB, 5 CPU cores on average.
+All runs on a W7900D server with the platform's limits imitated (`--cpus=64 --memory=200g --shm-size=64g`, the data
+volume mounted read-only at `/models/rlinf-workshop`, the notebooks in `/workspace`), 32 evaluation episodes each.
 
-**This Dockerfile** (built on the same kind of server, 15 minutes): compared file by file with the validated image's
-Python environment, interpreter, RLinf and RoboTwin (~102,000 files), 102,248 files have identical content. The rest
-are install metadata (`RECORD`, `direct_url.json`), the four Vulkan/flash-attention exports that moved from the
-`activate` script to `ENV`, four extension modules of `crcmod` and `evdev` compiled from source at install time (same
-versions; not used by the workshop), and the asset directories that are now links into the data volume. The system
-packages are the same 716 at the same versions, apart from four newer security updates (curl, libcurl4, libudev1,
-sudo). `smoke.sh` with the smoke Job's limits passed without the data volume (7 s; environment check skipped) and with
-it mounted read-only (24 s; reset 14 s, step 1 s). **In progress:** the 40-step notebook run on this image with the
-data volume mounted read-only.
+| Image | First evaluation | Whole notebook | Evaluation success after steps 10/20/30/40 |
+| --- | --- | --- | --- |
+| The validated RLinf image this Dockerfile reproduces | 17:46 after launch | 54:25 | 0.97 / 0.81 / 0.97 / 0.94 |
+| This Dockerfile, previous revision (`e2d5b54`) | 18:01 | 54:10 | 0.97 / 0.88 / 1.00 / 0.94 |
+| **This revision** (`amdsmi`, denoiser, `AMDGPU_ASIC_ID_TABLE_PATHS`; `/tmp` a 4 GB tmpfs as on Radeon Cloud) | ~17:30 | in progress | 0.97 / 0.91 / 0.88 / … |
+
+Peak memory 170–180 GB (including page cache), `/dev/shm` use 0.2 GB, 5–8 CPU cores on average. In this revision's run,
+`train.log` has no denoiser, `cudaError` or `(null): No such file or directory` lines (previously ~14,500 and 128),
+`/tmp` stayed at 1 MB and `/workspace/.tmp` peaked at 2.2 GB during start-up.
+
+**The image** (built on the same kind of server, 25 minutes, from the previous revision plus these changes; the
+maintainers' later changes on `main`, openssh and download sources, do not touch the training): compared file by file
+with the previous revision's image (~114,000 entries), the only differences are the `amdsmi` package (7.0.2 → 26.2.1), uv's install metadata and
+one newer Ubuntu security update (`linux-libc-dev`). The previous revision had been compared the same way with the
+validated image: in the Python environment, interpreter, RLinf and RoboTwin, 102,248 files had identical content; the
+rest were install metadata, the exports moved from `activate` to `ENV`, four `crcmod`/`evdev` extension modules
+compiled at install time, and the asset links; the same 716 system packages, four at newer security versions.
+`smoke.sh` with the smoke Job's limits passed without the data volume (9 s; environment check skipped) and with it mounted read-only (26 s;
+reset 14 s, step 1 s; `amd-smi` 26.2.1, "AMD Radeon Pro W7900D").
 
 ## How it reaches the picker
 
