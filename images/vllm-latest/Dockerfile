@@ -25,3 +25,7 @@ RUN sh /tmp/add_jupyterlab.sh && rm -f /tmp/add_jupyterlab.sh
 
 # JupyterLab terminals start "$SHELL -l" and fall back to sh when SHELL is unset (no history, no tab completion).
 ENV SHELL=/bin/bash
+
+# Keep the image toolchain environment (PATH, LD_LIBRARY_PATH, ROCm settings) in SSH sessions; see keep_image_env.sh. Last step: after every ENV.
+COPY keep_image_env.sh /tmp/keep_image_env.sh
+RUN sh /tmp/keep_image_env.sh && rm -f /tmp/keep_image_env.sh

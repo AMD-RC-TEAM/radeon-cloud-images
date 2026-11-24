@@ -153,3 +153,7 @@ assert os.path.isfile(os.environ["AMDGPU_ASIC_ID_TABLE_PATHS"] + "/amdgpu.ids")'
 
 # No CMD/ENTRYPOINT of its own: the platform starts instances with its own command (the base image's CMD is bash).
 WORKDIR /workspace
+
+# Keep the image toolchain environment (PATH, LD_LIBRARY_PATH, ROCm settings) in SSH sessions; see keep_image_env.sh. Last step: after every ENV.
+COPY keep_image_env.sh /tmp/keep_image_env.sh
+RUN sh /tmp/keep_image_env.sh && rm -f /tmp/keep_image_env.sh

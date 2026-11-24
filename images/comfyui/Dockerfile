@@ -33,3 +33,7 @@ ENV SHELL=/bin/bash
 # 4096^3) and bf16 ~20% faster; fp32 training was ~3x slower without it. smoke_lib.sh torch_gemm_floor checks it.
 # Remove when hipBLASLt matches rocBLAS on gfx1100 at all sizes (re-measure with torch_gemm_floor and bigger shapes).
 ENV TORCH_BLAS_PREFER_HIPBLASLT=0
+
+# Keep the image toolchain environment (PATH, LD_LIBRARY_PATH, ROCm settings) in SSH sessions; see keep_image_env.sh. Last step: after every ENV.
+COPY keep_image_env.sh /tmp/keep_image_env.sh
+RUN sh /tmp/keep_image_env.sh && rm -f /tmp/keep_image_env.sh
