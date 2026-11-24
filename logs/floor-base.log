@@ -1,0 +1,11 @@
+== unset (expect FAIL)
+gemm float32 4096^3: 2.7 TFLOPS (floor 12.0), blas=_BlasBackend.Cublaslt
+gemm bfloat16 4096^3: 68.1 TFLOPS (floor 60.0), blas=_BlasBackend.Cublaslt
+Traceback (most recent call last):
+  File "<stdin>", line 14, in <module>
+AssertionError: FAIL: GEMM below floor (is TORCH_BLAS_PREFER_HIPBLASLT=0 set?): float32 2.7 < 12.0
+RESULT unset FAIL
+== =0 (expect PASS)
+gemm float32 4096^3: 23.5 TFLOPS (floor 12.0), blas=_BlasBackend.Cublas
+gemm bfloat16 4096^3: 80.8 TFLOPS (floor 60.0), blas=_BlasBackend.Cublas
+RESULT zero PASS

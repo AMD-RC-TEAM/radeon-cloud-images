@@ -1,0 +1,7 @@
+model /hf-cache/hub/models--Qwen--Qwen3-8B/snapshots/b968826d9c46dd6066d109eabc6255188de91218/
+torch 2.13.0+git733fca1
+blas=unset round=1 SERVE_JSON {"c16_out_tok_s": 435.2, "b1_decode_tok_s": 42.6}
+blas=0 round=1 SERVE_JSON {"c16_out_tok_s": 459.4, "b1_decode_tok_s": 48.4}
+blas=unset round=2 SERVE_JSON {"c16_out_tok_s": 447.5, "b1_decode_tok_s": 48.4}
+blas=0 round=2 SERVE_JSON {"c16_out_tok_s": 445.8, "b1_decode_tok_s": 48.4}
+RUN DONE

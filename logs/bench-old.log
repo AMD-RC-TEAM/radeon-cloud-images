@@ -1,0 +1,57 @@
+== env
+TORCH_BLAS_PREFER_HIPBLASLT=1
+HSA_NO_SCRATCH_RECLAIM=1
+HIP_FORCE_DEV_KERNARG=1
+OMP_NUM_THREADS=<unset>
+== blas
+[W1124 15:11:29.088886890 Context.cpp:533] Warning: Attempting to use CK on an unsupported architecture! Cannot set backend to CK (function operator())
+[W1124 15:11:29.088906500 Context.cpp:562] Warning: torch.backends.cuda.preferred_blas_library is an experimental feature. If you see any error or unexpected behavior when this flag is set please file an issue on GitHub. (function operator())
+float32 1024 1024 1024 {'hipblaslt': 2.6, 'rocblas': 14.19} relerr {'hipblaslt': '1.4e-06', 'rocblas': '1.4e-06'}
+float32 2048 2048 2048 {'hipblaslt': 2.55, 'rocblas': 19.53} relerr {'hipblaslt': '2.0e-06', 'rocblas': '1.8e-06'}
+float32 4096 4096 4096 {'hipblaslt': 2.59, 'rocblas': 22.62} relerr {'hipblaslt': '2.6e-06', 'rocblas': '3.1e-06'}
+float32 8192 8192 8192 {'hipblaslt': 1.31, 'rocblas': 20.29} relerr {'hipblaslt': '4.9e-06', 'rocblas': '5.4e-06'}
+float32 8192 4096 1024 {'hipblaslt': 2.5, 'rocblas': 22.31} relerr {'hipblaslt': '1.5e-06', 'rocblas': '1.8e-06'}
+float32 32 4096 4096 {'hipblaslt': 2.2, 'rocblas': 5.53} relerr {'hipblaslt': '2.2e-06', 'rocblas': '2.2e-06'}
+float32 4096 11008 4096 {'hipblaslt': 1.84, 'rocblas': 20.35} relerr {'hipblaslt': '3.1e-06', 'rocblas': '2.9e-06'}
+float16 1024 1024 1024 {'hipblaslt': 42.3, 'rocblas': 43.25} relerr {'hipblaslt': '3.9e-04', 'rocblas': '3.9e-04'}
+float16 2048 2048 2048 {'hipblaslt': 60.18, 'rocblas': 76.63} relerr {'hipblaslt': '2.7e-04', 'rocblas': '2.7e-04'}
+float16 4096 4096 4096 {'hipblaslt': 66.52, 'rocblas': 84.87} relerr {'hipblaslt': '3.7e-04', 'rocblas': '3.7e-04'}
+float16 8192 8192 8192 {'hipblaslt': 57.87, 'rocblas': 77.28} relerr {'hipblaslt': '2.7e-04', 'rocblas': '2.7e-04'}
+float16 8192 4096 1024 {'hipblaslt': 65.01, 'rocblas': 84.54} relerr {'hipblaslt': '3.6e-04', 'rocblas': '3.6e-04'}
+float16 32 4096 4096 {'hipblaslt': 11.57, 'rocblas': 17.42} relerr {'hipblaslt': '4.1e-04', 'rocblas': '4.1e-04'}
+float16 4096 11008 4096 {'hipblaslt': 64.23, 'rocblas': 81.5} relerr {'hipblaslt': '3.5e-04', 'rocblas': '3.5e-04'}
+bfloat16 1024 1024 1024 {'hipblaslt': 41.82, 'rocblas': 42.84} relerr {'hipblaslt': '3.2e-03', 'rocblas': '3.2e-03'}
+bfloat16 2048 2048 2048 {'hipblaslt': 60.06, 'rocblas': 64.15} relerr {'hipblaslt': '2.1e-03', 'rocblas': '2.1e-03'}
+bfloat16 4096 4096 4096 {'hipblaslt': 66.76, 'rocblas': 80.66} relerr {'hipblaslt': '2.7e-03', 'rocblas': '2.7e-03'}
+bfloat16 8192 8192 8192 {'hipblaslt': 60.01, 'rocblas': 76.36} relerr {'hipblaslt': '3.0e-03', 'rocblas': '3.0e-03'}
+bfloat16 8192 4096 1024 {'hipblaslt': 65.76, 'rocblas': 81.34} relerr {'hipblaslt': '2.8e-03', 'rocblas': '2.8e-03'}
+bfloat16 32 4096 4096 {'hipblaslt': 11.47, 'rocblas': 17.48} relerr {'hipblaslt': '3.3e-03', 'rocblas': '3.3e-03'}
+bfloat16 4096 11008 4096 {'hipblaslt': 64.07, 'rocblas': 81.41} relerr {'hipblaslt': '2.8e-03', 'rocblas': '2.8e-03'}
+conv fp32 32 64 56 64 3 benchmark False 40.84
+conv fp32 32 256 14 256 3 benchmark False 39.02
+conv fp32 64 3 224 64 7 benchmark False 22.13
+conv fp32 32 128 28 128 1 benchmark False 15.2
+conv fp32 32 64 56 64 3 benchmark True 41.01
+conv fp32 32 256 14 256 3 benchmark True 39.74
+conv fp32 64 3 224 64 7 benchmark True 20.57
+conv fp32 32 128 28 128 1 benchmark True 12.97
+BLAS_JSON {"default_blas": "_BlasBackend.Cublaslt", "torch": "2.9.1+gitff65f5b", "gemm": {"float32_1024x1024x1024": {"hipblaslt": 2.6, "rocblas": 14.19}, "float32_2048x2048x2048": {"hipblaslt": 2.55, "rocblas": 19.53}, "float32_4096x4096x4096": {"hipblaslt": 2.59, "rocblas": 22.62}, "float32_8192x8192x8192": {"hipblaslt": 1.31, "rocblas": 20.29}, "float32_8192x4096x1024": {"hipblaslt": 2.5, "rocblas": 22.31}, "float32_32x4096x4096": {"hipblaslt": 2.2, "rocblas": 5.53}, "float32_4096x11008x4096": {"hipblaslt": 1.84, "rocblas": 20.35}, "float16_1024x1024x1024": {"hipblaslt": 42.3, "rocblas": 43.25}, "float16_2048x2048x2048": {"hipblaslt": 60.18, "rocblas": 76.63}, "float16_4096x4096x4096": {"hipblaslt": 66.52, "rocblas": 84.87}, "float16_8192x8192x8192": {"hipblaslt": 57.87, "rocblas": 77.28}, "float16_8192x4096x1024": {"hipblaslt": 65.01, "rocblas": 84.54}, "float16_32x4096x4096": {"hipblaslt": 11.57, "rocblas": 17.42}, "float16_4096x11008x4096": {"hipblaslt": 64.23, "rocblas": 81.5}, "bfloat16_1024x1024x1024": {"hipblaslt": 41.82, "rocblas": 42.84}, "bfloat16_2048x2048x2048": {"hipblaslt": 60.06, "rocblas": 64.15}, "bfloat16_4096x4096x4096": {"hipblaslt": 66.76, "rocblas": 80.66}, "bfloat16_8192x8192x8192": {"hipblaslt": 60.01, "rocblas": 76.36}, "bfloat16_8192x4096x1024": {"hipblaslt": 65.76, "rocblas": 81.34}, "bfloat16_32x4096x4096": {"hipblaslt": 11.47, "rocblas": 17.48}, "bfloat16_4096x11008x4096": {"hipblaslt": 64.07, "rocblas": 81.41}}, "conv": {"fp32_n32c64h56k64r3_bench0": 40.84, "fp32_n32c256h14k256r3_bench0": 39.02, "fp32_n64c3h224k64r7_bench0": 22.13, "fp32_n32c128h28k128r1_bench0": 15.2, "fp32_n32c64h56k64r3_bench1": 41.01, "fp32_n32c256h14k256r3_bench1": 39.74, "fp32_n64c3h224k64r7_bench1": 20.57, "fp32_n32c128h28k128r1_bench1": 12.97}, "check": {"torch.float32_1024x1024x1024": {"hipblaslt": 1.3596238951118387e-06, "rocblas": 1.432582776678081e-06}, "torch.float32_2048x2048x2048": {"hipblaslt": 1.9858875895976674e-06, "rocblas": 1.800640500582194e-06}, "torch.float32_4096x4096x4096": {"hipblaslt": 2.6311307008071234e-06, "rocblas": 3.1233896699125223e-06}, "torch.float32_8192x8192x8192": {"hipblaslt": 4.88413012657216e-06, "rocblas": 5.373708187981652e-06}, "torch.float32_8192x4096x1024": {"hipblaslt": 1.548462592241873e-06, "rocblas": 1.8256942698315428e-06}, "torch.float32_32x4096x4096": {"hipblaslt": 2.2322172877004676e-06, "rocblas": 2.2322172877004676e-06}, "torch.float32_4096x11008x4096": {"hipblaslt": 3.092758388581889e-06, "rocblas": 2.8552978179709556e-06}, "torch.float16_1024x1024x1024": {"hipblaslt": 0.00038707433974361107, "rocblas": 0.00038707433974361107}, "torch.float16_2048x2048x2048": {"hipblaslt": 0.00027406902239260366, "rocblas": 0.00027401268497540156}, "torch.float16_4096x4096x4096": {"hipblaslt": 0.000372694101154728, "rocblas": 0.0003716190046648881}, "torch.float16_8192x8192x8192": {"hipblaslt": 0.0002702309415513909, "rocblas": 0.0002701834032143914}, "torch.float16_8192x4096x1024": {"hipblaslt": 0.00035518079919055675, "rocblas": 0.00035518079919055675}, "torch.float16_32x4096x4096": {"hipblaslt": 0.00040524037878548796, "rocblas": 0.00040524037878548796}, "torch.float16_4096x11008x4096": {"hipblaslt": 0.00035251674002768397, "rocblas": 0.0003523186764364899}, "torch.bfloat16_1024x1024x1024": {"hipblaslt": 0.0031762882581756065, "rocblas": 0.0031762882581756065}, "torch.bfloat16_2048x2048x2048": {"hipblaslt": 0.0020823127518597388, "rocblas": 0.0020823127518597388}, "torch.bfloat16_4096x4096x4096": {"hipblaslt": 0.0026780886109378306, "rocblas": 0.0026780886109378306}, "torch.bfloat16_8192x8192x8192": {"hipblaslt": 0.0030152483922148456, "rocblas": 0.0030152483922148456}, "torch.bfloat16_8192x4096x1024": {"hipblaslt": 0.0028490866596543566, "rocblas": 0.0028490866596543566}, "torch.bfloat16_32x4096x4096": {"hipblaslt": 0.0032689016358851933, "rocblas": 0.0032689016358851933}, "torch.bfloat16_4096x11008x4096": {"hipblaslt": 0.0028019510400115943, "rocblas": 0.0028019510400115943}}}
+== launch
+LAUNCH_JSON {"mode": "fp32", "env": {"HSA_NO_SCRATCH_RECLAIM": null, "HIP_FORCE_DEV_KERNARG": null}, "steps_s": 381.2}
+LAUNCH_JSON {"mode": "fp32", "env": {"HSA_NO_SCRATCH_RECLAIM": "1", "HIP_FORCE_DEV_KERNARG": "1"}, "steps_s": 328.4}
+LAUNCH_JSON {"mode": "bf16", "env": {"HSA_NO_SCRATCH_RECLAIM": null, "HIP_FORCE_DEV_KERNARG": null}, "steps_s": 267.5}
+LAUNCH_JSON {"mode": "bf16", "env": {"HSA_NO_SCRATCH_RECLAIM": "1", "HIP_FORCE_DEV_KERNARG": "1"}, "steps_s": 274.0}
+LAUNCH_JSON {"mode": "fp32", "env": {"HSA_NO_SCRATCH_RECLAIM": null, "HIP_FORCE_DEV_KERNARG": null}, "steps_s": 377.3}
+LAUNCH_JSON {"mode": "fp32", "env": {"HSA_NO_SCRATCH_RECLAIM": "1", "HIP_FORCE_DEV_KERNARG": "1"}, "steps_s": 363.0}
+LAUNCH_JSON {"mode": "bf16", "env": {"HSA_NO_SCRATCH_RECLAIM": null, "HIP_FORCE_DEV_KERNARG": null}, "steps_s": 264.7}
+LAUNCH_JSON {"mode": "bf16", "env": {"HSA_NO_SCRATCH_RECLAIM": "1", "HIP_FORCE_DEV_KERNARG": "1"}, "steps_s": 243.2}
+LAUNCH_JSON {"mode": "fp32", "env": {"HSA_NO_SCRATCH_RECLAIM": null, "HIP_FORCE_DEV_KERNARG": null}, "steps_s": 334.7}
+LAUNCH_JSON {"mode": "fp32", "env": {"HSA_NO_SCRATCH_RECLAIM": "1", "HIP_FORCE_DEV_KERNARG": "1"}, "steps_s": 362.7}
+LAUNCH_JSON {"mode": "bf16", "env": {"HSA_NO_SCRATCH_RECLAIM": null, "HIP_FORCE_DEV_KERNARG": null}, "steps_s": 288.9}
+LAUNCH_JSON {"mode": "bf16", "env": {"HSA_NO_SCRATCH_RECLAIM": "1", "HIP_FORCE_DEV_KERNARG": "1"}, "steps_s": 291.2}
+== hf
+HF_JSON {"prec": "fp32", "transformers": "4.57.6", "blas": "_BlasBackend.Cublaslt", "env_blas": "1", "attn": "sdpa", "median_step_ms": 1384.1, "wall_60_steps_s": 84.4}
+HF_JSON {"prec": "fp32", "transformers": "4.57.6", "blas": "_BlasBackend.Cublas", "env_blas": "0", "attn": "sdpa", "median_step_ms": 490.2, "wall_60_steps_s": 30.6}
+HF_JSON {"prec": "bf16", "transformers": "4.57.6", "blas": "_BlasBackend.Cublaslt", "env_blas": "1", "attn": "sdpa", "median_step_ms": 139.8, "wall_60_steps_s": 9.4}
+HF_JSON {"prec": "bf16", "transformers": "4.57.6", "blas": "_BlasBackend.Cublas", "env_blas": "0", "attn": "sdpa", "median_step_ms": 132.8, "wall_60_steps_s": 9.2}
+RUN DONE
