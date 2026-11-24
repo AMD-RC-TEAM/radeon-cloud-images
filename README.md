@@ -1,138 +1,71 @@
 # radeon-cloud-images
 
-The single source for the images behind the "stable" rows of the Radeon Cloud image picker
-(owner decisions D-20261112-26, -27, -28, -29, -33, -37, -39). Every image is defined by a Dockerfile. The standard flow (D-20261112-37):
-**a PR (from the bot or a person) → one human Approve → build and smoke → release**.
+The Dockerfiles behind the "stable" images in the Radeon Cloud image picker (PyTorch, vLLM, SGLang, ComfyUI and more).
+A merged PR is built, smoke-tested on a Radeon W7900D GPU and released to users automatically.
 
-Everything in this repository is written in English: docs, comments, script output, workflow
-names, issues, PRs and commit messages.
+## Add or change an image
 
-**To upgrade an image or add one, see [CONTRIBUTING.md](CONTRIBUTING.md).**
+1. **Change an image:** edit the files in `images/<name>/`. To update the base image, change the tag and
+   `@sha256:` digest in the `FROM` line. For a pip package, change its pinned version.
+2. **New image:** copy `docs/image-template/` to `images/<name>/` and fill in `Dockerfile`, `image.yaml` and
+   `smoke.sh`. The template's comments say what goes where.
+3. Check it locally (below), then open a PR against `main`. In the description, say what changed and why, and link the
+   upstream release notes for a version bump.
+4. A bot also opens upgrade branches when an upstream image has a newer tag. Review those like any other PR.
 
-## Layout
+## What each file does
+
+| Path | Purpose |
+|---|---|
+| `images/<name>/Dockerfile` | The image: `FROM <public upstream image>:<tag>@sha256:<digest>`, then optional build steps. Use a public upstream image (exception today: `images/base` starts from a team-built image). |
+| `images/<name>/image.yaml` | Release settings: image name, picker row name, smoke profile, and which upstream tags the upgrade bot may propose. |
+| `images/<name>/smoke.sh` | Runs inside the image on one GPU and checks what users do with it. It must print `SMOKE PASS` as its last line. |
+| `images/<name>/add_jupyterlab.sh` | (most images) Installs a pinned JupyterLab without changing any package already in the image, so notebooks start fast. |
+| `images/<name>/add_openssh.sh` | (most images) Installs the SSH server so SSH access works without an install at launch. |
+| other files in `images/<name>/` | Inputs to the build, such as `requirements.txt`. |
+| `docs/image-template/` | Starting point for a new image. |
+| `tools/` | Release scripts (`release.py`), shared smoke helpers (`smoke_lib.sh`), the upstream checker and catalog tools. |
+| `help/` | The short help shown in a user's first terminal. It is built into the platform, not into the images. |
+| `.github/` | CI workflows and `CODEOWNERS`. |
+
+## Check it locally before the PR
+
+You need Docker. The smoke test also needs an AMD GPU. Only gfx1100 (for example a W7900D) is smoke-tested.
+
+```bash
+# 1. Validate the image files (under 1 s). Pass = prints the parsed settings and exits 0.
+python3 tools/release.py <name> --dry-run && test -x images/<name>/smoke.sh
+
+# 2. Build (a few minutes to about an hour, depending on the build steps). Pass = the build finishes.
+docker build --build-arg PIP_INDEX_URL=https://pypi.org/simple -t local/<name> images/<name>
+
+# 3. Smoke test on the GPU (usually 5 to 30 min). Pass = the last line is "SMOKE PASS".
+docker run --rm --device=/dev/kfd --device=/dev/dri --group-add video --shm-size 16g \
+  -v "$PWD/images/<name>/smoke.sh:/smoke/smoke.sh:ro" \
+  -v "$PWD/tools/smoke_lib.sh:/smoke/smoke_lib.sh:ro" \
+  -v "$PWD/tools/hk_readme_smoke.sh:/smoke/hk_readme_smoke.sh:ro" \
+  local/<name> bash /smoke/smoke.sh
 ```
-images/<name>/
-  Dockerfile   # FROM <public upstream>:<tag>@sha256:... (never our Harbor); the pipeline mirrors it and builds from Harbor
-  image.yaml   # rc_repo (Harbor alias repo), catalog_row (the stable row), smoke profile, upstream tag rule
-  smoke.sh     # runs inside the image on one W7900D; prints "SMOKE PASS" last on success
-tools/
-  release.py         # release one image: mirror upstream -> smoke -> move rc-current
-  mirror.sh          # resumable, digest-checked mirror (the Wuxi edge cuts single connections at ~10 min), then crane push
-  harbor.py upstream_check.py
-  ci/slot_pool.py    # CI GPU slot leases shared with Radeon-Cloud-Internal CI (vendored, keep in sync)
-.github/workflows/
-  pr-check.yml       # required on every PR: validate + smoke (smoke only; no tag or catalog change)
-  release.yml        # on push to main touching images/**: release the changed images
-  upstream-check.yml # daily: if upstream has a newer tag, push an upgrade branch (the FROM line) and open an issue with a one-click PR link
-  rollback.yml       # manual one-click rollback
-```
 
-## Release flow
-1. **PR and Approve.** Every change to `main` needs one Approve from a code owner, plus green `validate` and `smoke`.
-   The Approve is the only human gate; there is no extra waiting period or second approval.
-2. **Mirror.** If Harbor does not have the upstream digest yet, mirror it to `radeon-cloud-global/<upstream repo>:<tag>`
-   with the digest unchanged. Cluster nodes never pull large images from the internet.
-3. **Smoke.** Claim a CI slot with `tools/ci/slot_pool.py`, run a 1-GPU Job in the slot namespace
-   (nodes labelled `amd-oneclick.io/workload-ci=enabled`) that runs `smoke.sh`. No `SMOKE PASS` means failure.
-   The slot is released only once the Job is confirmed gone; otherwise it is quarantined.
-4. **Alias.** Copy the digest server-side into `radeon-cloud-global/rc/<category>`, move the old `rc-current`
-   to `rc-prev`, and point `rc-current` at the new digest. CI stops here.
-5. **Catalog (outside CI, rc-ops job).** GT first: the stable row adopts the new digest, then an automatic launch
-   check starts one minimal instance from that row on GT and deletes it once it is ready. Only after that check
-   passes do the Global and China stable rows adopt the same digest. If the check fails, production keeps the
-   previous digest and the daily issue says why.
-6. **Failure anywhere:** nothing further moves; one line in the day's "image pipeline daily" issue.
+If you have no GPU, run steps 1 and 2. The PR check runs the smoke test for you.
 
-## Versions in the picker (D-20261114-08)
+## Review
 
-After a smoke passes, the release runs `tools/versions_probe.py` in the same container and prints
-`RC-VERSIONS-OF <digest> {"image": ..., "versions": {"ROCm": ..., "Python": ..., "PyTorch": ..., ...}}` in the run log.
-catalog_sync (outside CI) reads that line when it moves a stable row to the digest and sets the row description to
-`<one-line purpose> · ROCm 7.2.3 · Python 3.12 · PyTorch 2.10.0 · ...`; the "(previous)" row keeps the versions of its
-older digest. For digests released before this existed, run the `versions-probe` workflow with
-`<name>=<registry/repo@sha256:...>` pairs (no GPU, no CI slot, nothing promoted).
+- CI on every PR: `validate` checks the image files and the tools, and `smoke` builds each changed image and runs its
+  `smoke.sh` on a W7900D. Both must be green. A PR check takes about 10 min to 1 h per changed image.
+- One approval from a code owner (@M4jupitercannon, see `.github/CODEOWNERS`) is required to merge. Nobody can
+  approve their own PR. The reviewer checks the upstream release notes and that the smoke test still covers what
+  users do.
 
-## JupyterLab in every stable image
-Radeon Cloud's launch step checks the image for `jupyter` on PATH, Python 3.10-3.12, `jupyter_server` >=2.14,<3 and
-`jupyterlab` >=4.2,<5. If they are missing, it pip-installs JupyterLab on every launch (measured 18-188 s, 11-13).
-So every image here carries a pinned JupyterLab. Images that do not already include one get it from
-`add_jupyterlab.sh`, which pins everything already installed as a constraint (nothing existing may change). Their
-digests are therefore our own builds on top of the mirrored upstream image, not the upstream digest itself. Each
-smoke checks the fast path and that the Jupyter layer changed no existing package (`tools/smoke_lib.sh`).
+## After merge
 
-## Templates
-**Point templates at a fixed-version image row, not at a stable row.** Stable rows move with this pipeline.
-Updating a template's image is done by the template's owner, by hand in Admin, and tested by them (D-20261112-39).
-The pipeline never changes a row that any template (public or private) references, and the daily issue names
-every template that points at a stable row so its owner can move it to a fixed-version row.
-
-## Old images stay usable
-- **Templates are pinned.** Templates reference catalog rows that hold a fixed digest. The pipeline only ever
-  updates the per-category *stable* rows, and refuses to adopt on any row that a template references.
-- **One previous version stays available.** On every release the old digest is kept in Harbor as `rc-prev`, and
-  each site keeps one hidden catalog row "<category> (previous)" tracking `rc/<category>:rc-prev`, for users or
-  templates that need the older environment and as the one-click rollback target. Only the latest previous
-  version is kept. The same rule applies to it: if a template references the "(previous)" row, the pipeline
-  stops moving that row (it becomes a frozen row like any other template-referenced row) and says so in the
-  daily issue.
-  This should be rare: the new UI has no personal templates, so once the old UI is retired only public
-  templates exist, and those are pointed at fixed-version rows by their owners.
-- **Running instances are not affected.** A release changes which digest new launches use. Instances that are
-  already running keep the image they started with until they are deleted.
-
-## Rollback
-Actions -> rollback -> image: `rc-current` goes back to `rc-prev`; the catalog job then adopts it on every site.
-The digest that was rolled back stays tagged `rc-rolled-back`.
-
-## First-shell help (no action needed in images)
-
-Every Radeon Cloud instance shows a short help the first time a user opens a terminal (quick start, downloads, files,
-`rc-tunnel`). **Image authors don't need to do anything**: the platform mounts it into every instance at
-`/etc/profile.d/00-rc-help.sh` from the ConfigMap `amd-oneclick-shell-help` (D-20261114-06), and the script detects
-the image family itself (SGLang, vLLM, ComfyUI, PyTorch; anything else gets the common part).
-
-To change the text, edit `help/text/common.txt` (all images) or `help/text/<family>.txt` (quick start), then:
-
-    python3 help/build_configmap.py --namespace <runtime-namespace> > shell-help.json
-    kubectl -n <runtime-namespace> delete cm amd-oneclick-shell-help --ignore-not-found
-    kubectl create -f shell-help.json        # runtime namespaces only admit immutable ConfigMaps
-
-New instances pick it up; running ones keep the version they started with. No image rebuild.
-
-## Adding or upgrading an image
-- **Upgrade:** change the `FROM` line's tag@digest (the daily bot prepares this branch for you), read the upstream
-  release notes, merge. See CONTRIBUTING.md.
-- **New image:** add `images/<name>/` with the three files, after rc-ux has created a stable row in Admin that
-  tracks `rc/<category>:rc-current`.
-- **Images with build steps** (RUN/COPY, for example `sglang`) are built with Kaniko in the runner namespace, with
-  no GPU, into `build/<name>:ctx-<hash of the build context>`. Files other than `image.yaml` and `smoke.sh` are the
-  context. A context that was already built (by the PR check) is reused on release, so the release ships exactly the
-  digest that passed the smoke. pip uses a PyPI mirror reachable from the cluster (passed as the `PIP_INDEX_URL`
-  build argument; declare `ARG PIP_INDEX_URL` in the Dockerfile); smoke Jobs get `HF_ENDPOINT` pointing at a
-  Hugging Face mirror.
-
-## Credentials (never in GitHub)
-Only one, kept as a k8s Secret in the runner namespace `amd-oneclick-ci-runners` and copied to `$RUNNER_TEMP` at run
-time, never printed:
-- `radeon-images-harbor` (`.dockerconfigjson`): Harbor robot `radeon-cloud-images-ci`, limited to the
-  `radeon-cloud-global` project (pull/push, artifact read/create, tag create/delete). Expires 180 days from 2026-11-12.
-
-No catalog credential is stored in the cluster (D-20261112-33).
-
-## Runner
-One in-cluster runner that serves only this repository (label `radeon-images`, namespace `amd-oneclick-ci-runners`,
-service account `gh-runner`, so it has the CI slot lease and slot namespace permissions). It was registered once
-with a one-time registration token; the cluster stores only the runner's own credentials, no PAT.
-
-## Branch protection and who approves (`main`)
-`main` requires one Approve from a code owner (the owner or Zijun) and green `validate` and `smoke`; no direct
-pushes, admins included; no force pushes or branch deletion. GitHub does not let anyone approve their own PR, so:
-- **Today (no bot App):** the upgrade bot pushes a branch and opens an issue with a one-click "open PR" link. The
-  owner opens the PR from that link, so the owner is the PR author, and **Zijun approves**. A PR opened by Zijun is
-  approved by the owner.
-- **Later, if the GitHub App is created** (manifest kept by rc-ops): the bot itself opens the PR, so the PR author is
-  the bot and **the owner can approve** directly.
-
-## Status
-First batch: PyTorch stable, PyTorch latest, vLLM. Second batch: SGLang (built, without hk-dsl while hk-dsl is paused), Base, Unsloth.
-llama.cpp and ComfyUI later.
+1. The release workflow builds each changed image again, or reuses the build that passed the PR check, and runs the
+   smoke test again on a W7900D.
+2. If it passes, the image is published as the new current version of that image. The previous version is kept
+   for rollback.
+3. The image picker is then updated. The test site goes first and launches one instance from the new image as a
+   check. Only after that check passes do the production sites switch to it.
+4. Users see the new version in the picker's stable row for that image, and a hidden "(previous)" row keeps the
+   old one. Running instances keep the image they started with. Templates are never changed by a release.
+5. If anything fails, nothing is published and the current version stays. The `rollback` workflow (Actions tab)
+   switches an image back to its previous version.

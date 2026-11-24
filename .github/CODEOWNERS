@@ -1,4 +1,4 @@
-# Notification only: merging is gated by the pr-check CI (validate + smoke), not by review (D-20261112-29).
+# Merging to main needs one code-owner approval plus green pr-check CI (validate + smoke).
 *                 @vivienfanghuagood @M4jupitercannon
 /tools/           @vivienfanghuagood
 /.github/         @vivienfanghuagood

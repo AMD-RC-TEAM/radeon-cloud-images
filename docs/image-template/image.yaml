@@ -1,6 +1,6 @@
 # Release settings for this image (read by tools/release.py and tools/upstream_check.py).
 name: <name>
-rc_repo: rc/<name>               # the catalog stable row tracks 10.5.10.12:1808/radeon-cloud-global/rc/<name>:rc-current
+rc_repo: rc/<name>               # the catalog stable row tracks <registry>/rc/<name>:rc-current
 catalog_row: "<Picker name>"     # the stable catalog row only; template rows are never touched
 smoke: <name>
 upstream:            # the registry/repo come from the Dockerfile's FROM line
