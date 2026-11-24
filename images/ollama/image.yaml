@@ -1,0 +1,7 @@
+# Release settings for this image (read by tools/release.py and tools/upstream_check.py).
+name: ollama
+rc_repo: rc/ollama               # the catalog stable row tracks <registry>/rc/ollama:rc-current
+catalog_row: "<Picker name>"     # the stable catalog row only; template rows are never touched
+smoke: ollama                 # which smoke profile images/ollama/smoke.sh runs
+upstream:            # the registry/repo come from the Dockerfile's FROM line
+  tag_regex: '^<regex for the upstream tags the bot may propose>$'
