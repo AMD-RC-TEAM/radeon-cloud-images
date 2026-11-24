@@ -1,0 +1,8 @@
+login shell, clean env:
+/opt/venv/bin/python3
+env=0 blas=_BlasBackend.Cublas fp32_4096=22.9 TFLOPS
+interactive shell, clean env:
+/opt/venv/bin/python3
+env=0 blas=_BlasBackend.Cublas fp32_4096=20.8 TFLOPS
+user export wins in login shell:
+env=1 blas=_BlasBackend.Cublaslt fp32_4096=2.6 TFLOPS

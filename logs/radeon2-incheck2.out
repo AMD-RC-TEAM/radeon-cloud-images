@@ -1,0 +1,16 @@
+== 0. plain python in the container
+env=0 blas=_BlasBackend.Cublas fp32_4096=21.5 TFLOPS
+== A. jupyter server process env
+pid 1: TORCH_BLAS_PREFER_HIPBLASLT=0
+== B. real kernel via nbconvert
+env=0 blas=_BlasBackend.Cublas fp32_4096=22.8 TFLOPS
+== C. real SSH session to localhost
+ssh: connect to host 127.0.0.1 port 22: Connection refused
+== D. overrides
+temp sshd stopped
+0
+env=1 blas=_BlasBackend.Cublaslt fp32_4096=2.6 TFLOPS
+after preferred_blas_library(cublaslt): _BlasBackend.Cublaslt
+== E. image
+1
+2.10.0+rocm7.2.4.git3d3aa833

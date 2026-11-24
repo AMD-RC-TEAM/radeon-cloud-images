@@ -1,0 +1,11 @@
+sshd processes before: 126 [sshd] <defunct>;130 [sshd] <defunct>;735 [sshd] <defunct>;741 [sshd] <defunct>;762 [sshd] <defunct>;773 [sshd] <defunct>;794 [sshd] <defunct>;803 [sshd] <defunct>;
+sshd log: Server listening on 0.0.0.0 port 2222.;Server listening on :: port 2222.;
+ssh exit=255
+Connection reset by 127.0.0.1 port 2222
+--- ssh client:
+Connection reset by 127.0.0.1 port 2222
+--- sshd log:
+Server listening on 0.0.0.0 port 2222.
+Server listening on :: port 2222.
+chroot("/run/sshd"): Operation not permitted [preauth]
+sshd processes after: 126 [sshd] <defunct>;130 [sshd] <defunct>;735 [sshd] <defunct>;741 [sshd] <defunct>;762 [sshd] <defunct>;773 [sshd] <defunct>;794 [sshd] <defunct>;803 [sshd] <defunct>;826 [sshd] <defunct>;835 [sshd] <defunct>;
