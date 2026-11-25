@@ -58,4 +58,5 @@ assert im.size == (512, 512) and sd > 10, "render is blank"
 PY
 pkill -f "main.py --listen" || true
 torch_gemm_floor   # fp32/bf16 matmul speed with the image defaults (TORCH_BLAS_PREFER_HIPBLASLT=0)
+cpu_threads_match_limit   # CPU thread pools follow the instance's CPU limit; user setting wins; hook fail-safe
 echo "SMOKE PASS"

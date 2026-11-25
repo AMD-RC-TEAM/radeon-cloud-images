@@ -54,4 +54,5 @@ else
   echo "jupyterlab not in image (the RC launcher provides it); skipped"
 fi
 torch_gemm_floor   # fp32/bf16 matmul speed with the image defaults (TORCH_BLAS_PREFER_HIPBLASLT=0)
+cpu_threads_match_limit   # CPU thread pools follow the instance's CPU limit; user setting wins; hook fail-safe
 echo "SMOKE PASS"

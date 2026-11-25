@@ -93,4 +93,5 @@ for i in $(seq 1 60); do curl -sf "http://127.0.0.1:18888/api/status?token=smoke
 curl -sf "http://127.0.0.1:18888/api/status?token=smoke" >/dev/null || { tail -20 /tmp/jl.log; exit 1; }
 
 torch_gemm_floor   # fp32/bf16 matmul speed with the image defaults (TORCH_BLAS_PREFER_HIPBLASLT=0)
+cpu_threads_match_limit   # CPU thread pools follow the instance's CPU limit; user setting wins; hook fail-safe
 echo "SMOKE PASS"
