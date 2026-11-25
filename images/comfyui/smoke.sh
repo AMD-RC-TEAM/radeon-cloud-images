@@ -57,4 +57,5 @@ print(f"SD1.5 fp16 render: {im.size[0]}x{im.size[1]} in {time.time() - t0:.0f}s,
 assert im.size == (512, 512) and sd > 10, "render is blank"
 PY
 pkill -f "main.py --listen" || true
+torch_gemm_floor   # fp32/bf16 matmul speed with the image defaults (TORCH_BLAS_PREFER_HIPBLASLT=0)
 echo "SMOKE PASS"

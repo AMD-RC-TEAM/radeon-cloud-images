@@ -21,6 +21,32 @@ PY
   fi
 }
 
+# torch_gemm_floor: plain fp32 and bf16 matmuls with the image's default settings must reach a minimum speed on the
+# W7900D (gfx1100). On gfx1100, torch's default BLAS library (hipBLASLt) runs fp32 GEMM at ~2.6 TFLOPS against ~22 for
+# rocBLAS, which made fp32 training ~3x slower (2026-11-24). Images set TORCH_BLAS_PREFER_HIPBLASLT=0 to get rocBLAS;
+# this check fails if that setting is lost or a library upgrade regresses. Measured on 8 images at 4096^3: fp32 22-23
+# TFLOPS with rocBLAS vs 2.6 with hipBLASLt, so a floor of 12 catches the slow path with room for card-to-card noise.
+# bf16 measured 80-84 (rocBLAS) and 66-70 (hipBLASLt); its floor of 60 only catches a large half-precision regression,
+# since the fp32 floor already catches the library choice. Override GEMM_FLOOR_FP32 / GEMM_FLOOR_BF16 only to re-measure.
+torch_gemm_floor() {
+  python3 - "${GEMM_FLOOR_FP32:-12}" "${GEMM_FLOOR_BF16:-60}" <<'PY'
+import sys, time, torch
+floors = {torch.float32: float(sys.argv[1]), torch.bfloat16: float(sys.argv[2])}
+n, fails = 4096, []
+for dt, floor in floors.items():
+    a, b = torch.randn(n, n, device="cuda", dtype=dt), torch.randn(n, n, device="cuda", dtype=dt)
+    best = 0.0
+    for _ in range(3):                      # best of 3 timed runs, so one slow sample does not fail the smoke
+        a @ b; torch.cuda.synchronize(); t = time.perf_counter()
+        for _ in range(20): a @ b
+        torch.cuda.synchronize(); best = max(best, 2 * n**3 * 20 / (time.perf_counter() - t) / 1e12)
+    print(f"gemm {str(dt)[6:]} {n}^3: {best:.1f} TFLOPS (floor {floor}), blas={torch.backends.cuda.preferred_blas_library()}")
+    if best < floor:
+        fails.append(f"{str(dt)[6:]} {best:.1f} < {floor}")
+assert not fails, "FAIL: GEMM below floor (is TORCH_BLAS_PREFER_HIPBLASLT=0 set?): " + "; ".join(fails)
+PY
+}
+
 # no_in_image_welcome: the first-shell help comes from the platform (D-20261114-06), not from the image.
 no_in_image_welcome() {
   [ ! -e /etc/profile.d/rc-welcome.sh ] || { echo "FAIL: image still ships /etc/profile.d/rc-welcome.sh"; return 1; }

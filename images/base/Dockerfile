@@ -25,6 +25,11 @@ RUN sh /tmp/add_common.sh && rm -f /tmp/add_common.sh
 # JupyterLab terminals start "$SHELL -l" and fall back to sh when SHELL is unset (no history, no tab completion).
 ENV SHELL=/bin/bash
 
+# Use rocBLAS, not hipBLASLt, for torch matmuls on the W7900D (gfx1100): fp32 GEMM is ~8x faster (22 vs 2.6 TFLOPS at
+# 4096^3) and bf16 ~20% faster; fp32 training was ~3x slower without it. smoke_lib.sh torch_gemm_floor checks it.
+# Remove when hipBLASLt matches rocBLAS on gfx1100 at all sizes (re-measure with torch_gemm_floor and bigger shapes).
+ENV TORCH_BLAS_PREFER_HIPBLASLT=0
+
 # Keep the image toolchain environment (PATH, LD_LIBRARY_PATH, ROCm settings) in SSH sessions; see keep_image_env.sh. Last step: after every ENV.
 COPY keep_image_env.sh /tmp/keep_image_env.sh
 RUN sh /tmp/keep_image_env.sh && rm -f /tmp/keep_image_env.sh

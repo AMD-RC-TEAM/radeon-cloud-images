@@ -41,4 +41,5 @@ for i in $(seq 1 30); do
   sleep 1
 done
 curl -fsS 'http://127.0.0.1:18888/api/status?token=smoke' >/dev/null || { tail -50 /tmp/robotwin-jupyter.log; exit 1; }
+torch_gemm_floor   # fp32/bf16 matmul speed with the image defaults (TORCH_BLAS_PREFER_HIPBLASLT=0)
 echo "SMOKE PASS"
