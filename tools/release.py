@@ -96,8 +96,9 @@ def context_tag(m):
 
 # Kaniko build time limit. Builds have no layer cache and snapshot the whole filesystem after each RUN, so a big
 # image's from-scratch build is slow: comfyui (ROCm 7.14 base, ~20 GB) took ~85 min on 11-24, and one more RUN step
-# pushed it past the old 90-min limit (images#43, 11-25). Lower it again if builds get a layer cache.
-BUILD_DEADLINE_S = 7200
+# pushed it past the old 90-min limit (images#43, 11-25). At 120 min it built in ~116, too close to rely on, so 180.
+# Lower it again once builds get a layer cache (planned).
+BUILD_DEADLINE_S = 10800
 
 
 def build(m):
