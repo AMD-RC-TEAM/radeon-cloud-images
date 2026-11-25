@@ -1,0 +1,4 @@
+MIOpen(HIP): Warning [ParseAndLoadDb] File is unreadable: "/opt/venv/lib/python3.12/site-packages/_rocm_sdk_libraries/share/miopen/db/gfx1100_48.HIP.fdb.txt"
+warning: xnack 'Off' was requested for a processor that does not support it!
+warning: xnack 'Off' was requested for a processor that does not support it!
+AUDIT_JSON {"cpu_count": 128, "affinity": 128, "cgroup_cpus": 16.0, "env": {"HSA_DISABLE_COREDUMP_ON_EXCEPTION": "1"}, "torch": "2.12.0+rocm7.14.1", "torch_threads": 64, "interop_threads": 64, "cpu_mm_gflops": {"default_64": 345.4, "limit_16": 324.8}, "numpy_mm_gflops": {"default": "157.8", "omp_16": "580.4"}, "miopen_conv_ms": {"first": 7660, "steady": 2.7}, "miopen_user_db": ["/tmp/.config/miopen", "/tmp/.cache/miopen"]}

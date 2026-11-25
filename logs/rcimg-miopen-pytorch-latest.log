@@ -1,0 +1,5 @@
+SWEEP_JSON {"mode": "default", "torch": "2.14.0+rocm10.1.0", "resnet50_bf16_bs64_train": [36.19, 187.43], "resnet50_fp32_bs32_train": [19.25, 150.68], "unet_like_fp16_bs2_train": [8.59, 16.66], "resnet50_fp16_bs1_infer": [0.54, 4.15]}
+SWEEP_JSON {"mode": "FAST", "torch": "2.14.0+rocm10.1.0", "resnet50_bf16_bs64_train": [20.16, 228.83], "resnet50_fp32_bs32_train": [13.09, 164.24], "unet_like_fp16_bs2_train": [2.92, 20.63], "resnet50_fp16_bs1_infer": [0.58, 4.14]}
+SWEEP_JSON {"mode": "default", "torch": "2.14.0+rocm10.1.0", "resnet50_bf16_bs64_train": [35.78, 187.4], "resnet50_fp32_bs32_train": [19.27, 148.16], "unet_like_fp16_bs2_train": [8.53, 16.59], "resnet50_fp16_bs1_infer": [0.54, 4.14]}
+SWEEP_JSON {"mode": "FAST", "torch": "2.14.0+rocm10.1.0", "resnet50_bf16_bs64_train": [20.4, 228.78], "resnet50_fp32_bs32_train": [12.89, 164.24], "unet_like_fp16_bs2_train": [2.97, 20.65], "resnet50_fp16_bs1_infer": [0.58, 4.14]}
+RUN DONE

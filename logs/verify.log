@@ -1,0 +1,48 @@
+### pod/rcimg-cpuv-base
+torch 2.10.0+rocm7.2.4.git3d3aa833 python /opt/venv/bin/python3
+no hook, OMP=7 only:  torch threads 7
+no hook, MKL=5 only:  torch threads 5
+no hook, none:        torch threads 64
+hook installed
+cpu threads: 16 (CPU limit) in python, torch and login shells; user setting wins; hook fail-safe
+SMOKE CASE PASS
+### pod/rcimg-cpuv-comfyui
+torch 2.12.0+rocm7.14.1 python /opt/venv/bin/python3
+no hook, OMP=7 only:  torch threads 7
+no hook, MKL=5 only:  torch threads 5
+no hook, none:        torch threads 64
+hook installed
+cpu threads: 16 (CPU limit) in python, torch and login shells; user setting wins; hook fail-safe
+SMOKE CASE PASS
+### pod/rcimg-cpuv-pytorch-latest
+torch 2.14.0+rocm10.1.0 python /usr/bin/python3
+no hook, OMP=7 only:  torch threads 7
+no hook, MKL=5 only:  torch threads 5
+no hook, none:        torch threads 64
+hook installed
+cpu threads: 16 (CPU limit) in python, torch and login shells; user setting wins; hook fail-safe
+SMOKE CASE PASS
+### pod/rcimg-cpuv-pytorch-stable
+torch 2.12.0+rocm7.14.1 python /opt/venv/bin/python3
+no hook, OMP=7 only:  torch threads 7
+no hook, MKL=5 only:  torch threads 5
+no hook, none:        torch threads 64
+hook installed
+cpu threads: 16 (CPU limit) in python, torch and login shells; user setting wins; hook fail-safe
+SMOKE CASE PASS
+### pod/rcimg-cpuv-rlinf-workshop
+torch 2.11.0+rocm7.2 python /opt/venv/lingbotvla/bin/python3
+no hook, OMP=7 only:  torch threads 7
+no hook, MKL=5 only:  torch threads 5
+no hook, none:        torch threads 64
+hook installed
+cpu threads: 16 (CPU limit) in python, torch and login shells; user setting wins; hook fail-safe
+SMOKE CASE PASS
+### pod/rcimg-cpuv-robotwin-lingbot-vla
+torch 2.9.1+rocm7.2.1.gitff65f5bc python /opt/robotwin-env/bin/python3
+no hook, OMP=7 only:  torch threads 7
+no hook, MKL=5 only:  torch threads 5
+no hook, none:        torch threads 64
+hook installed
+cpu threads: 16 (CPU limit) in python, torch and login shells; user setting wins; hook fail-safe
+SMOKE CASE PASS

@@ -1,0 +1,19 @@
+cgroup cpu.max: 6400000 100000  nproc: 128
+BEFORE 1
+M_JSON {"OMP_NUM_THREADS": null, "OPENBLAS_NUM_THREADS": null, "MKL_NUM_THREADS": null, "torch_threads": 64, "numpy_mm_gflops": 830, "torch_cpu_mm_gflops": 1657, "torch_cpu_conv_ms": 2.3, "dataloader_samples_s": 533, "resnet50_bf16_img_s": 392}
+BEFORE 2
+M_JSON {"OMP_NUM_THREADS": null, "OPENBLAS_NUM_THREADS": null, "MKL_NUM_THREADS": null, "torch_threads": 64, "numpy_mm_gflops": 1030, "torch_cpu_mm_gflops": 1761, "torch_cpu_conv_ms": 1.5, "dataloader_samples_s": 561, "resnet50_bf16_img_s": 392}
+rc_cpu_threads installed in /opt/venv/lib/python3.12/site-packages/rc_cpu_threads.py
+AFTER 1
+M_JSON {"OMP_NUM_THREADS": "64", "OPENBLAS_NUM_THREADS": "64", "MKL_NUM_THREADS": "64", "torch_threads": 64, "numpy_mm_gflops": 1005, "torch_cpu_mm_gflops": 1879, "torch_cpu_conv_ms": 4.3, "dataloader_samples_s": 541, "resnet50_bf16_img_s": 378}
+AFTER 2
+M_JSON {"OMP_NUM_THREADS": "64", "OPENBLAS_NUM_THREADS": "64", "MKL_NUM_THREADS": "64", "torch_threads": 64, "numpy_mm_gflops": 990, "torch_cpu_mm_gflops": 1842, "torch_cpu_conv_ms": 3.5, "dataloader_samples_s": 559, "resnet50_bf16_img_s": 388}
+== what each process sees
+python:            64 64
+python -I:         64
+user export 4:     4 64 64
+login shell:       64 64 64
+interactive shell: 64
+non-interactive (as sshd runs host cmds, bashrc sourced via SSH_CLIENT): 64
+shell user export: 3 64
+RUN DONE

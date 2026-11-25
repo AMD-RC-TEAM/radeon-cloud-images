@@ -1,0 +1,10 @@
+rc_cpu_threads installed in /opt/venv/lib/python3.12/site-packages/rc_cpu_threads.py
+== what each process sees
+python:            16 16
+python -I:         16
+user export 4:     4 4 4 4
+login shell:       16 16 16
+interactive shell: 16
+non-interactive (as sshd runs host cmds, bashrc sourced via SSH_CLIENT): 16
+shell user export: 3 3 3
+RUN DONE

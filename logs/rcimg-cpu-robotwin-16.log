@@ -1,0 +1,19 @@
+cgroup cpu.max: 1600000 100000  nproc: 128
+BEFORE 1
+M_JSON {"OMP_NUM_THREADS": null, "OPENBLAS_NUM_THREADS": null, "MKL_NUM_THREADS": null, "torch_threads": 64, "numpy_mm_gflops": 169, "torch_cpu_mm_gflops": 807, "torch_cpu_conv_ms": 4.0, "dataloader_samples_s": 242, "resnet50_bf16_img_s": 391}
+BEFORE 2
+M_JSON {"OMP_NUM_THREADS": null, "OPENBLAS_NUM_THREADS": null, "MKL_NUM_THREADS": null, "torch_threads": 64, "numpy_mm_gflops": 171, "torch_cpu_mm_gflops": 522, "torch_cpu_conv_ms": 9.8, "dataloader_samples_s": 222, "resnet50_bf16_img_s": 392}
+rc_cpu_threads installed in /opt/robotwin-env/lib/python3.12/site-packages/rc_cpu_threads.py
+AFTER 1
+M_JSON {"OMP_NUM_THREADS": "16", "OPENBLAS_NUM_THREADS": "16", "MKL_NUM_THREADS": "16", "torch_threads": 16, "numpy_mm_gflops": 511, "torch_cpu_mm_gflops": 1008, "torch_cpu_conv_ms": 4.1, "dataloader_samples_s": 231, "resnet50_bf16_img_s": 390}
+AFTER 2
+M_JSON {"OMP_NUM_THREADS": "16", "OPENBLAS_NUM_THREADS": "16", "MKL_NUM_THREADS": "16", "torch_threads": 16, "numpy_mm_gflops": 498, "torch_cpu_mm_gflops": 1066, "torch_cpu_conv_ms": 2.2, "dataloader_samples_s": 242, "resnet50_bf16_img_s": 390}
+== what each process sees
+python:            16 16
+python -I:         16
+user export 4:     4 16 16
+login shell:       16 16 16
+interactive shell: 16
+non-interactive (as sshd runs host cmds, bashrc sourced via SSH_CLIENT): 16
+shell user export: 3 16
+RUN DONE
