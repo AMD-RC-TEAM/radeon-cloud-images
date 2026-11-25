@@ -8,7 +8,7 @@ versions come from installed metadata, ROCm from /opt/rocm. catalog_sync turns t
 import glob, json, os, platform, re, subprocess, sys
 from importlib import metadata
 
-ORDER = ["ROCm", "Python", "PyTorch", "vLLM", "SGLang", "ComfyUI", "llama.cpp", "Unsloth"]
+ORDER = ["ROCm", "Python", "PyTorch", "vLLM", "SGLang", "ComfyUI", "llama.cpp", "Ollama", "Unsloth"]
 
 
 # Tools installed outside the default interpreter (uv tool install unsloth, a venv under /opt).
@@ -74,10 +74,20 @@ def llama_cpp():
     return pkg("llama_cpp_python", "llama-cpp-python")
 
 
+def ollama_version():
+    # `ollama -v` prints "ollama version is 0.40.18" (plus a warning when no server is running); the first match wins.
+    try:
+        out = subprocess.run(["ollama", "-v"], capture_output=True, text=True, timeout=20)
+    except (OSError, subprocess.TimeoutExpired):
+        return None
+    m = re.search(r"version(?: is)?\s*v?(\d+(?:\.\d+)+)", out.stdout + out.stderr)
+    return m.group(1) if m else None
+
+
 def main():
     v = {"ROCm": rocm(), "Python": ".".join(platform.python_version_tuple()[:2]),
          "PyTorch": pkg("torch"), "vLLM": pkg("vllm"), "SGLang": pkg("sglang"), "ComfyUI": comfyui(),
-         "llama.cpp": llama_cpp(), "Unsloth": pkg("unsloth")}
+         "llama.cpp": llama_cpp(), "Ollama": ollama_version(), "Unsloth": pkg("unsloth")}
     print("RC-VERSIONS " + json.dumps({k: v[k] for k in ORDER if v.get(k)}, separators=(",", ":")))
 
 
