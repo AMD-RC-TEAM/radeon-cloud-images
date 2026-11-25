@@ -40,6 +40,9 @@ ollama_env_over_ssh() {
 ollama_env_over_ssh
 
 grep -m1 -E 'gfx1100' <<<"$(rocminfo)"
+# fp32/bf16 matmul speed of the image's PyTorch with the image defaults (TORCH_BLAS_PREFER_HIPBLASLT=0). Runs before
+# the Ollama server starts, so the two do not compete for the GPU.
+torch_gemm_floor
 command -v ollama
 # Models go to /workspace/ollama/models at runtime; nothing is baked under /workspace.
 [ "${OLLAMA_MODELS:-}" = /workspace/ollama/models ] || { echo "FAIL: OLLAMA_MODELS is '${OLLAMA_MODELS:-}'"; exit 1; }
