@@ -2,13 +2,14 @@
 """Print the key software versions of the image this runs in, as one line: RC-VERSIONS {"ROCm": "7.2.3", ...}.
 
 Run inside an image by the release smoke (and by `release.py --probe`). Standard library only, no GPU needed: package
-versions come from installed metadata, ROCm from /opt/rocm. catalog_sync turns the line into the picker description
+versions come from installed metadata, ROCm from /opt/rocm. A strata-rdna3 image also reports Strata and strata-dsv41
+next to ROCm and Python. catalog_sync turns the line into the picker description
 ("<purpose> · ROCm 7.2.3 · Python 3.12 · PyTorch 2.10.0 · vLLM 0.33.0"); the docs images page reads the same JSON.
 """
 import glob, json, os, platform, re, subprocess, sys
 from importlib import metadata
 
-ORDER = ["ROCm", "Python", "PyTorch", "vLLM", "SGLang", "ComfyUI", "llama.cpp", "Unsloth"]
+ORDER = ["ROCm", "Python", "Strata", "strata-dsv41", "PyTorch", "vLLM", "SGLang", "ComfyUI", "llama.cpp", "Unsloth"]
 
 
 # Tools installed outside the default interpreter (uv tool install unsloth, a venv under /opt).
@@ -62,6 +63,42 @@ def comfyui():
     return pkg("comfyui")
 
 
+def _run_version(exe, timeout=20):
+    try:
+        out = subprocess.run([exe, "--version"], capture_output=True, text=True, timeout=timeout)
+    except (OSError, subprocess.TimeoutExpired):
+        return ""
+    return (out.stdout or "") + (out.stderr or "")
+
+
+def strata():
+    try:
+        v = open("/opt/rc-strata/VERSION").read().strip()
+        if v:
+            return v
+    except OSError:
+        pass
+    text = _run_version("/opt/strata/terminal/bin/strata")
+    m = re.search(r"strata\s+(\d+\.\d+\.\d+)", text)
+    return m.group(1) if m else None
+
+
+def strata_dsv41():
+    exe = None
+    try:
+        exe = open("/etc/strata-dsv41-exe").read().strip() or None
+    except OSError:
+        pass
+    if not exe:
+        exe = "strata-dsv41"
+    text = _run_version(exe)
+    m = re.search(r"strata-dsv41\s+(\S+)", text)
+    if m:
+        return m.group(1)
+    m = re.search(r"(\d+\.\d+\.\d+)", text)
+    return m.group(1) if m else None
+
+
 def llama_cpp():
     for exe in ("llama-server", "llama-cli"):
         try:
@@ -76,6 +113,7 @@ def llama_cpp():
 
 def main():
     v = {"ROCm": rocm(), "Python": ".".join(platform.python_version_tuple()[:2]),
+         "Strata": strata(), "strata-dsv41": strata_dsv41(),
          "PyTorch": pkg("torch"), "vLLM": pkg("vllm"), "SGLang": pkg("sglang"), "ComfyUI": comfyui(),
          "llama.cpp": llama_cpp(), "Unsloth": pkg("unsloth")}
     print("RC-VERSIONS " + json.dumps({k: v[k] for k in ORDER if v.get(k)}, separators=(",", ":")))

@@ -1,0 +1,7 @@
+# Release settings for this image (read by tools/release.py and tools/upstream_check.py).
+name: strata-rdna3
+rc_repo: rc/strata-rdna3               # Harbor: 10.5.10.12:1808/radeon-cloud-global/rc/strata-rdna3:rc-current is what the catalog stable row tracks
+catalog_row: "Strata · RDNA3"           # kept for later; no picker row until smoke + owner decision D-20261112-26
+smoke: strata-rdna3                 # CI: jupyter, gfx1100, list/plan, mandatory qwen3.6 serve+completion; multi-GPU DeepSeek/Qwen3.8 are manual
+upstream:            # the registry/repo come from the Dockerfile's FROM line
+  tag_regex: '^[0-9]+\.[0-9]+\.[0-9]+-rocm-gfx110x$'         # upstream Strata gfx110x tags; the runtime FROM is ghcr.io, so the bot cannot auto-mirror or bump it until rc-ops copies the digest
