@@ -22,11 +22,11 @@ RUN sh /tmp/add_jupyterlab.sh && rm -f /tmp/add_jupyterlab.sh && \
 
 # The engine bundle (scripts + engine binaries, 13 MB) comes from a small sha-pinned image in our Harbor, not from git.
 # It was copied there from radeon-engine4's artifact server after checking its SHA256SUMS; the sha is checked again here.
-# COPY --from cannot take a build variable, so the reference is written out and pinned by digest (repo README:
-# "Build inputs from Harbor"). To update: push the new bundle the same way, change these three lines, re-measure.
+# Written without a registry, like FROM: tools/release.py points `rc-artifacts/...` at our Harbor at build time
+# (repo README: "Build inputs from Harbor"). To update: push the new bundle the same way, change these three lines, re-measure.
 ARG STRATA_BUNDLE_VERSION=v3.1
 ARG STRATA_BUNDLE_SHA256=03bfd8a1ee3d7aa92df8f97d0c02d4fffc3c34ee43dddef9995d767b181e3563
-COPY --from=10.5.10.12:1808/radeon-cloud-global/rc-artifacts/strata-bundle@sha256:a6f1be5a972dd27c0f1d790531147d4ca9ce96ea8f87a1c56a41b560f651cc74 /bundle/context.tgz /tmp/strata/context.tgz
+COPY --from=rc-artifacts/strata-bundle@sha256:a6f1be5a972dd27c0f1d790531147d4ca9ce96ea8f87a1c56a41b560f651cc74 /bundle/context.tgz /tmp/strata/context.tgz
 COPY add_strata.sh /tmp/add_strata.sh
 RUN sh /tmp/add_strata.sh && rm -f /tmp/add_strata.sh
 

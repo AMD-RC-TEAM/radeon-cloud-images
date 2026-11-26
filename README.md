@@ -77,6 +77,6 @@ If you have no GPU, run steps 1 and 2. The PR check runs the smoke test for you.
 
 An image's own build inputs come from its directory or from a pinned public upstream. One exception: a build artifact
 that isn't public and doesn't belong in git (today: the Strata engine bundle for `strata-qwen38`) may come from a
-one-file image in our Harbor under `rc-artifacts/`, referenced as `COPY --from=<harbor>/rc-artifacts/<name>@sha256:…`.
-The Dockerfile names its source and re-checks the file's sha256 during the build. Such a reference is written out in
-full because `COPY --from` cannot take a build variable.
+one-file image in our Harbor, written as `COPY --from=rc-artifacts/<name>@sha256:…`. As with `FROM`, the Dockerfile names
+no registry: `tools/release.py` points `rc-artifacts/` at Harbor when it builds, and refuses Dockerfiles that name it.
+The Dockerfile says where the artifact came from and re-checks its sha256 during the build.
