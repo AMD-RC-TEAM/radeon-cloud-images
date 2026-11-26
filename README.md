@@ -80,3 +80,9 @@ that isn't public and doesn't belong in git (today: the Strata engine bundle for
 one-file image in our Harbor, written as `COPY --from=rc-artifacts/<name>@sha256:…`. As with `FROM`, the Dockerfile names
 no registry: `tools/release.py` points `rc-artifacts/` at Harbor when it builds, and refuses Dockerfiles that name it.
 The Dockerfile says where the artifact came from and re-checks its sha256 during the build.
+
+- **Backup:** every artifact also has a sha256-checked copy in rc-images' lane directory, which backup-dr syncs daily to
+  its encrypted store. Pushing that copy back reproduces the same image digest, so no Dockerfile change is needed.
+- **Update:** the producing lane builds the new artifact from a pinned source commit and publishes its sha256 →
+  rc-images checks it, pushes it under a new tag, and keeps the backup copy → a PR changes the version, sha256 and
+  digest lines in the Dockerfile → re-test where it runs + CI smoke → second reader → merge.
