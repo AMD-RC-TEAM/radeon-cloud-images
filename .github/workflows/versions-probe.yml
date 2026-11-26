@@ -1,5 +1,5 @@
 # Print the key software versions of images that are already released (D-20261114-08): a one-off backfill for
-# catalog rows released before the release smoke started reporting them. No GPU, no CI slot, nothing is promoted.
+# catalog rows released before the release smoke started reporting them. No GPU, nothing is promoted.
 # catalog_sync reads the "RC-VERSIONS-OF <digest> {...}" lines from this run's log.
 name: versions-probe
 on:
