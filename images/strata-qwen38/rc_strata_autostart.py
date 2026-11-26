@@ -2,15 +2,14 @@
 
 Radeon Cloud starts every notebook instance with its own command (`jupyter lab`), so an image cannot use CMD or an
 entrypoint. jupyter_server loads this extension at start-up (enabled in {sys.prefix}/etc/jupyter/jupyter_server_config.d/
-rc_strata.json). It copies the quick-start files into the notebook root once, then starts /opt/b0/current/run.sh in its
-own process group if the model is mounted. The server listens on 127.0.0.1:8080 and is reached through
+rc_strata.json). It starts /opt/b0/current/run.sh in its own process group if the model is mounted. It writes nothing
+into the user's workspace: the template supplies the notebook (images carry only the environment). The server listens on 127.0.0.1:8080 and is reached through
 jupyter-server-proxy at <notebook URL prefix>/proxy/8080/. On shutdown (SIGTERM to Jupyter) it SIGTERMs the server and
 waits up to 25 s, inside the platform's 30 s grace. Set RC_STRATA_AUTOSTART=0 to keep it from starting.
 Never raises: a problem here must not stop JupyterLab.
 """
-import atexit, os, shutil, signal, subprocess
+import atexit, os, signal, subprocess
 
-QUICKSTART = "/opt/strata-quickstart"
 _proc = None
 
 
@@ -36,11 +35,6 @@ def _load_jupyter_server_extension(app):
     global _proc
     log = app.log
     try:
-        root = getattr(app, "root_dir", None) or os.getcwd()
-        for name in sorted(os.listdir(QUICKSTART)) if os.path.isdir(QUICKSTART) else []:
-            dst = os.path.join(root, name)
-            if not os.path.exists(dst):
-                shutil.copy(os.path.join(QUICKSTART, name), dst)
         if os.environ.get("RC_STRATA_AUTOSTART", "1") == "0":
             log.info("rc_strata_autostart: disabled by RC_STRATA_AUTOSTART=0")
             return

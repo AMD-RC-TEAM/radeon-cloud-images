@@ -22,7 +22,8 @@ RUN sh /tmp/add_jupyterlab.sh && rm -f /tmp/add_jupyterlab.sh && \
 
 # The engine bundle (scripts + engine binaries, 13 MB) comes from a small sha-pinned image in our Harbor, not from git.
 # It was copied there from radeon-engine4's artifact server after checking its SHA256SUMS; the sha is checked again here.
-# To update: push the new bundle the same way, change these three lines, and re-measure (README "Testing").
+# COPY --from cannot take a build variable, so the reference is written out and pinned by digest (repo README:
+# "Build inputs from Harbor"). To update: push the new bundle the same way, change these three lines, re-measure.
 ARG STRATA_BUNDLE_VERSION=v3.1
 ARG STRATA_BUNDLE_SHA256=03bfd8a1ee3d7aa92df8f97d0c02d4fffc3c34ee43dddef9995d767b181e3563
 COPY --from=10.5.10.12:1808/radeon-cloud-global/rc-artifacts/strata-bundle@sha256:a6f1be5a972dd27c0f1d790531147d4ca9ce96ea8f87a1c56a41b560f651cc74 /bundle/context.tgz /tmp/strata/context.tgz
@@ -30,9 +31,9 @@ COPY add_strata.sh /tmp/add_strata.sh
 RUN sh /tmp/add_strata.sh && rm -f /tmp/add_strata.sh
 
 # Start the server next to JupyterLab (the platform runs `jupyter lab`, so no CMD), and reach it via jupyter-server-proxy.
+# No notebooks or files for /workspace in the image: the template clones its notebook repo there (as for the workshops).
 COPY rc_strata_autostart.py /opt/venv/lib/python3.12/site-packages/rc_strata_autostart.py
 COPY rc_strata.json /opt/venv/etc/jupyter/jupyter_server_config.d/rc_strata.json
-COPY STRATA-README.md strata-quicktest.ipynb /opt/strata-quickstart/
 
 # Server settings. It listens on 127.0.0.1 only: inside the instance and through the Jupyter proxy, never directly.
 # No per-instance API key: the gateway replaces the Authorization header with the Jupyter token, so access control is

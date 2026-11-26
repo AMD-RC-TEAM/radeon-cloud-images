@@ -47,7 +47,7 @@ box(49, 17, 26, 14, "rc_strata_autostart", ["Jupyter extension in the image", "s
 box(81, 34, 46, 14, "Strata engine  ·  127.0.0.1:8080 (OpenAI API)", ["not exposed: reachable only inside the pod / via the proxy",
     "GPU: all 24,576 experts resident in VRAM (40 GB)", "28.8 GB n-gram table: direct NVMe reads, no page cache"])
 box(81, 17, 46, 14, "Model mount  /models/qwen38-flash-next-iq3xxs", ["78.2 GB, read-only hostPath on node-local NVMe",
-    "staged by ops on 2-3 W7900D nodes, sha256-checked", "Admin template's model_mount pins scheduling there"], edge=AQUA)
+    "staged by ops on 3 W7900D nodes, sha256-checked", "template's pool label exists only on those nodes"], edge=AQUA)
 arrow(42.3, 42.5, 48.7, 42.5)
 arrow(75.3, 41, 80.7, 41, "HTTP")
 arrow(62, 31.2, 62, 33.7, "", style="-|>")
@@ -62,7 +62,7 @@ box(1, 2, 40, 22, "Image build (CI, merge = release)", [
     "COPY --from=<Harbor> rc-artifacts/strata-bundle@sha256",
     "   engine bundle, sha256 re-checked in the build",
     "+ JupyterLab, jupyter-server-proxy, sshd,",
-    "   autostart extension, README + quick-test notebook"], edge=ORANGE)
+    "   autostart extension (no notebooks: the template adds them)"], edge=ORANGE)
 arrow(41.3, 13, 46.7, 22)
 
 # Memory budget (measured in the instance shape, s-060, 11-26)

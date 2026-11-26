@@ -72,3 +72,11 @@ If you have no GPU, run steps 1 and 2. The PR check runs the smoke test for you.
    old one. Running instances keep the image they started with. Templates are never changed by a release.
 5. If anything fails, nothing is published and the current version stays. The `rollback` workflow (Actions tab)
    switches an image back to its previous version.
+
+## Build inputs from Harbor
+
+An image's own build inputs come from its directory or from a pinned public upstream. One exception: a build artifact
+that isn't public and doesn't belong in git (today: the Strata engine bundle for `strata-qwen38`) may come from a
+one-file image in our Harbor under `rc-artifacts/`, referenced as `COPY --from=<harbor>/rc-artifacts/<name>@sha256:…`.
+The Dockerfile names its source and re-checks the file's sha256 during the build. Such a reference is written out in
+full because `COPY --from` cannot take a build variable.
