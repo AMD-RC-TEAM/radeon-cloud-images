@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Release one image: mirror upstream -> candidate -> GPU smoke in a CI slot -> move rc-current (D-20261112-33).
+"""Release one image: mirror upstream -> candidate -> GPU smoke on the CI node -> move rc-current (D-20261112-33).
 
   release.py <image> [--smoke-only] [--dry-run]
 
@@ -160,35 +160,15 @@ def build(m):
     return repo, built["digest"]
 
 
-SLOT_POOL = [sys.executable, os.path.join(ROOT, "tools", "ci", "slot_pool.py")]
-
-
-def slot_acquire():
-    """Claim one CI slot (same lease protocol as RCI CI). Leaves it 'allocated'; we never deploy a stack into it."""
-    r = subprocess.run(SLOT_POOL + ["acquire", "--wait-seconds", "3600"], text=True, capture_output=True)
-    last = (r.stdout.strip().splitlines() or ["{}"])[-1]
-    slot = json.loads(last) if last.startswith("{") else {}
-    if r.returncode or slot.get("acquired") != "true":
-        raise SystemExit(f"could not claim a CI slot: {r.stdout[-300:]} {r.stderr[-300:]}")
-    print(f"slot: {slot['id']} ({slot['namespace']})")
-    return slot["namespace"]
-
-
-def slot_release(job_gone):
-    """Release only when our Job is confirmed gone; otherwise quarantine so RCI CI never gets a busy GPU slot."""
-    cmd = "release" if job_gone else "quarantined"
-    r = subprocess.run(SLOT_POOL + [cmd], text=True, capture_output=True)
-    print(f"slot: {cmd} rc={r.returncode} {r.stdout.strip()[-200:]}")
-
-
 def smoke(m, candidate):
-    ns = slot_acquire()
-    try:
-        _smoke_in(ns, m, candidate)
-    finally:
-        gone = subprocess.run(["kubectl", "-n", ns, "get", "jobs", "-l", "app.kubernetes.io/part-of=radeon-cloud-images",
-                               "-o", "name"], text=True, capture_output=True).stdout.strip() == ""
-        slot_release(gone)
+    """One GPU on the CI node, as a Job in the runner namespace.
+
+    The smoke deploys no stack, so it takes none of the RCI CI slots: a slot is a whole test stack that RCI's PR
+    checks queue for, and holding one for a single-GPU Job stopped them (11-26: one failed smoke held a slot for
+    58 minutes). The scheduler hands out the node's GPUs; a smoke that cannot get one
+    stays Pending and fails at its deadline with the reason printed.
+    """
+    _smoke_in(BUILD_NS, m, candidate)
 
 
 def _smoke_in(ns, m, candidate):
@@ -218,15 +198,23 @@ def _smoke_in(ns, m, candidate):
     try:
         # Give up before the Job's activeDeadlineSeconds (3600): at the deadline Kubernetes deletes the pod and its
         # logs, so a hung smoke used to fail with no output at all (11-13 #15).
-        r = subprocess.run(["kubectl", "-n", ns, "wait", f"job/{name}", "--for=condition=complete", "--timeout=3480s"],
-                           text=True, capture_output=True)
+        # Polled, as build() does: `kubectl wait --for=condition=complete` never returns for a Job that failed, so a
+        # smoke that died in 8 seconds was waited on for the whole 58 minutes (11-26).
+        passed, deadline = False, time.time() + 3480
+        while time.time() < deadline:
+            st = json.loads(sh("kubectl", "-n", ns, "get", "job", name, "-o", "json")).get("status", {})
+            if st.get("succeeded"):
+                passed = True; break
+            if st.get("failed"):
+                break
+            time.sleep(10)
         logs = sh("kubectl", "-n", ns, "logs", f"job/{name}", "--tail=200", check=False)
         print(logs)
-        ok = r.returncode == 0 and "SMOKE PASS" in logs
+        ok = passed and "SMOKE PASS" in logs
         if ok:
             report_versions(m["name"], candidate, logs)
         if not ok:
-            # The slot namespaces keep no events, so say why before the Job is deleted (11-12: a smoke sat 30 min with no output).
+            # Say why before the Job is deleted (11-12: a smoke sat 30 min with no output).
             print("smoke did not pass; pod state:")
             print(sh("kubectl", "-n", ns, "get", "pods", "-l", f"job-name={name}", "-o",
                      "custom-columns=POD:.metadata.name,PHASE:.status.phase,NODE:.spec.nodeName,"
@@ -264,7 +252,7 @@ def report_versions(name, ref, logs):
 
 
 def probe(ref, name="probe"):
-    """Run only the versions probe in an existing image (no GPU, no slot): for backfilling rows released earlier."""
+    """Run only the versions probe in an existing image (no GPU): for backfilling rows released earlier."""
     if "@sha256:" not in ref:
         raise SystemExit("probe needs an image reference pinned by digest")
     job_name = f"rcimg-versions-{name}-{int(time.time())}"[:62]

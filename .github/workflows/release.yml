@@ -1,5 +1,5 @@
 # Merging a change under images/<name>/ to main IS the release gate (owner D-20261112-27).
-# Per changed image: mirror upstream (digest-preserving) -> 1-GPU W7900D smoke in a CI slot -> move rc-current.
+# Per changed image: mirror upstream (digest-preserving) -> 1-GPU W7900D smoke on the CI node -> move rc-current.
 # The catalog rows that track rc-current are updated outside CI (D-20261112-33).
 name: release
 on:
@@ -59,7 +59,7 @@ jobs:
           umask 077; mkdir -p "$RUNNER_TEMP/docker"
           kubectl -n amd-oneclick-ci-runners get secret radeon-images-harbor -o jsonpath='{.data.\.dockerconfigjson}' | base64 -d > "$RUNNER_TEMP/docker/config.json"
           echo "DOCKER_CONFIG=$RUNNER_TEMP/docker" >> "$GITHUB_ENV"
-      - name: Release (claims and frees its own CI slot)
+      - name: Release
         run: python3 tools/release.py "${{ matrix.image }}"
       - name: Report failure to the daily issue
         if: failure()

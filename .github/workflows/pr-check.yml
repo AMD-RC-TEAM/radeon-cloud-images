@@ -28,7 +28,7 @@ jobs:
         run: |
           for d in images/*/; do python3 tools/release.py "$(basename "$d")" --dry-run >/dev/null; test -x "$d/smoke.sh"; done
           python3 -c 'import glob,yaml;[yaml.safe_load(open(f)) for f in glob.glob(".github/workflows/*.yml")]'
-          python3 -m py_compile tools/*.py tools/ci/*.py
+          python3 -m py_compile tools/*.py
           python3 -I tools/test_catalog_sync.py
       - id: c
         name: Changed images
