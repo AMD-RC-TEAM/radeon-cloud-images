@@ -1,6 +1,6 @@
 # Release settings for this image (read by tools/release.py and tools/upstream_check.py).
 name: sglang
-rc_repo: rc/sglang               # Harbor: 10.5.10.12:1808/radeon-cloud-global/rc/sglang:rc-current is what the catalog stable row tracks
+rc_repo: rc/sglang               # Harbor: <pull registry>/rc/sglang:rc-current is what the catalog stable row tracks
 catalog_row: "SGLang"           # the stable catalog row only; template rows are never touched
 smoke: sglang                 # which smoke profile images/sglang/smoke.sh runs (see README)
 upstream:            # the registry/repo come from the Dockerfile's FROM line

@@ -1,19 +1,24 @@
 """Minimal Harbor v2 API client (pull/API host is internal; credentials come from a docker config file)."""
 import base64, json, os, urllib.error, urllib.parse, urllib.request
 
-API = os.environ.get("HARBOR_API", "http://10.5.10.12:1808")
+# The registry addresses are not in this public repository: CI passes them as secrets (RC_REGISTRY_PULL / _PUSH,
+# each "<host:port>/<project>"). The API is served on the pull host unless HARBOR_API says otherwise.
+REGISTRY_HOSTS = [r.split("/")[0] for r in (os.environ.get("RC_REGISTRY_PULL", ""), os.environ.get("RC_REGISTRY_PUSH", "")) if r]
+API = os.environ.get("HARBOR_API") or (f"http://{REGISTRY_HOSTS[0]}" if REGISTRY_HOSTS else "")
 PROJECT = os.environ.get("HARBOR_PROJECT", "radeon-cloud-global")
 
 
 def _auth():
     cfg = json.load(open(os.path.join(os.environ.get("DOCKER_CONFIG", os.path.expanduser("~/.docker")), "config.json")))
     for host, v in cfg.get("auths", {}).items():
-        if host.split("://")[-1].startswith(("10.5.10.12", "36.150.116.202")):
+        if host.split("://")[-1] in REGISTRY_HOSTS:
             return v.get("auth") or base64.b64encode(f"{v['username']}:{v['password']}".encode()).decode()
     raise SystemExit("no Harbor credentials in docker config")
 
 
 def call(method, path, body=None):
+    if not API:
+        raise SystemExit("RC_REGISTRY_PULL (or HARBOR_API) is not set: the registry address comes from CI secrets")
     req = urllib.request.Request(API + path, method=method, data=json.dumps(body).encode() if body is not None else None,
                                  headers={"Authorization": "Basic " + _auth(), "Accept": "application/json",
                                           "Content-Type": "application/json"})

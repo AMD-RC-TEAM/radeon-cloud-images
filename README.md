@@ -59,6 +59,8 @@ If you have no GPU, run steps 1 and 2. The PR check runs the smoke test for you.
 - One approval from a code owner (@M4jupitercannon, see `.github/CODEOWNERS`) is required to merge. Nobody can
   approve their own PR. The reviewer checks the upstream release notes and that the smoke test still covers what
   users do.
+- The registry addresses are repository secrets (`RC_REGISTRY_PULL`, `RC_REGISTRY_PUSH`), not written in this public
+  repository. Without them, `release.py --dry-run` still validates; building, pushing and tagging stop with a clear error.
 
 ## After merge
 

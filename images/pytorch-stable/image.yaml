@@ -1,6 +1,6 @@
 # Release settings for this image (read by tools/release.py and tools/upstream_check.py).
 name: pytorch-stable
-rc_repo: rc/pytorch-stable               # Harbor: 10.5.10.12:1808/radeon-cloud-global/rc/pytorch-stable:rc-current is what the catalog stable row tracks
+rc_repo: rc/pytorch-stable               # Harbor: <pull registry>/rc/pytorch-stable:rc-current is what the catalog stable row tracks
 catalog_row: "PyTorch · 稳定"           # the stable catalog row only; template rows are never touched
 smoke: pytorch                 # which smoke profile images/pytorch-stable/smoke.sh runs (see README)
 upstream:            # the registry/repo come from the Dockerfile's FROM line
