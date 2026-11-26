@@ -1,0 +1,8 @@
+# Release settings for this image (read by tools/release.py and tools/upstream_check.py).
+name: strata-qwen38
+rc_repo: rc/strata-qwen38
+catalog_row: "Strata · Qwen3.8-Flash-Next"   # label only: test-site rows are hidden and created by hand, not synced
+smoke: strata-qwen38
+upstream:
+  # Stay on exactly ROCm 7.2.1: the engine binaries are built and measured against its libraries.
+  tag_regex: '^7\.2\.1-complete$'
