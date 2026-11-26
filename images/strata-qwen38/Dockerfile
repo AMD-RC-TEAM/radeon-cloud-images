@@ -23,9 +23,9 @@ RUN sh /tmp/add_jupyterlab.sh && rm -f /tmp/add_jupyterlab.sh && \
 # The engine bundle (scripts + engine binaries, 13 MB) comes from a small sha-pinned image in our Harbor, not from git.
 # It was copied there from radeon-engine4's artifact server after checking its SHA256SUMS; the sha is checked again here.
 # To update: push the new bundle the same way, change these three lines, and re-measure (README "Testing").
-ARG STRATA_BUNDLE_VERSION=v2.1
-ARG STRATA_BUNDLE_SHA256=06f784925ac5734e475b8b17dcb7ba643a5098d6176e21f1f0231ca82e3ff75e
-COPY --from=10.5.10.12:1808/radeon-cloud-global/rc-artifacts/strata-bundle@sha256:745b064bc1542831f36d3f95ffce91baf5e0c1521764e8b1f21df64b7aa84f73 /bundle/context.tgz /tmp/strata/context.tgz
+ARG STRATA_BUNDLE_VERSION=v3.1
+ARG STRATA_BUNDLE_SHA256=03bfd8a1ee3d7aa92df8f97d0c02d4fffc3c34ee43dddef9995d767b181e3563
+COPY --from=10.5.10.12:1808/radeon-cloud-global/rc-artifacts/strata-bundle@sha256:a6f1be5a972dd27c0f1d790531147d4ca9ce96ea8f87a1c56a41b560f651cc74 /bundle/context.tgz /tmp/strata/context.tgz
 COPY add_strata.sh /tmp/add_strata.sh
 RUN sh /tmp/add_strata.sh && rm -f /tmp/add_strata.sh
 

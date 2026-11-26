@@ -15,6 +15,8 @@ print(client.chat.completions.create(model="Qwen3.8-Flash-Next-IQ3_XXS",
 
 **Who can reach it:** only this instance and that proxy. The server listens on 127.0.0.1 and is not exposed to the internet, so no API key is needed inside the instance.
 
-**Speed (measured on this instance size, 1 GPU):** one user ~110 tok/s (Chinese) and ~134 tok/s (code). Two parallel requests reach ~130-148 tok/s together.
+**Speed (measured on this instance size, 1 GPU):** one user ~110 tok/s (Chinese) and ~134 tok/s (code). Two parallel requests reach ~130-150 tok/s together. The first request after the server starts takes a few seconds longer to begin (a cache fills); later ones don't.
+
+**Long conversations:** the server keeps recent conversations, so the next turn of a long chat starts in about a second instead of tens of seconds.
 
 **If something is wrong:** the server log is `/tmp/b0-logs/autostart.log`. Health: `curl -s http://127.0.0.1:8080/health` (ready when `"loaded": true`). To restart it, restart the instance.

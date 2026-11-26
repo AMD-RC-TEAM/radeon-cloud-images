@@ -10,7 +10,7 @@ openssh_baked
 ssh_keeps_image_env
 no_in_image_welcome
 grep -m1 -E 'gfx1100' <<<"$(rocminfo)"
-test "$(readlink -f /opt/b0/current)" = /opt/b0/v2.1
+test "$(readlink -f /opt/b0/current)" = /opt/b0/v3.1
 ! ldd /opt/b0/current/bin/strata | grep "not found"
 /opt/strata/venv/bin/python -c 'import sys; sys.path.insert(0, "/opt/strata/control"); import serve.server; print("strata server imports")'
 ext=$(jupyter server extension list 2>&1)
