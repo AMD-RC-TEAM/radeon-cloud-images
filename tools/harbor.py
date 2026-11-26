@@ -5,6 +5,8 @@ import base64, json, os, urllib.error, urllib.parse, urllib.request
 # each "<host:port>/<project>"). The API is served on the pull host unless HARBOR_API says otherwise.
 REGISTRY_HOSTS = [r.split("/")[0] for r in (os.environ.get("RC_REGISTRY_PULL", ""), os.environ.get("RC_REGISTRY_PUSH", "")) if r]
 API = os.environ.get("HARBOR_API") or (f"http://{REGISTRY_HOSTS[0]}" if REGISTRY_HOSTS else "")
+if API:   # a caller that sets only HARBOR_API (ops' catalog tooling does) still finds its credentials
+    REGISTRY_HOSTS.append(API.split("://")[-1].split("/")[0])
 PROJECT = os.environ.get("HARBOR_PROJECT", "radeon-cloud-global")
 
 
