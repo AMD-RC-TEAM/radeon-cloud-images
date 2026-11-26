@@ -238,15 +238,21 @@ def build(m):
     try:
         # Stop polling 120 s before the Job's own deadline (as smoke() does): at the deadline Kubernetes deletes the
         # pod, and with it the build log printed below (11-26: images#50's timed-out build left no log).
-        ok, deadline = False, time.time() + BUILD_DEADLINE_S - 120
+        ok, deadline, last_log = False, time.time() + BUILD_DEADLINE_S - 120, ""
         while time.time() < deadline:
             st = json.loads(sh("kubectl", "-n", BUILD_NS, "get", "job", name, "-o", "json")).get("status", {})
             if st.get("succeeded"):
                 ok = True; break
             if st.get("failed"):
                 break
+            # Keep the latest log tail while the pod exists: a job that hits its deadline has its pod deleted at once,
+            # and the fetch below would then come back empty (11-25/26: #43 comfyui, #50 ollama). Printed only on failure.
+            last_log = sh("kubectl", "-n", BUILD_NS, "logs", f"job/{name}", "--tail=60", check=False) or last_log
             time.sleep(30)
-        print(sh("kubectl", "-n", BUILD_NS, "logs", f"job/{name}", "--tail=60", check=False))
+        final_log = sh("kubectl", "-n", BUILD_NS, "logs", f"job/{name}", "--tail=60", check=False)
+        print(final_log)
+        if not ok and not final_log.strip() and last_log.strip():
+            print(f"build: the pod is gone; last log captured while it ran:\n{last_log}")
         if not ok:
             print(sh("kubectl", "-n", BUILD_NS, "get", "pods", "-l", f"job-name={name}", "-o", "wide", check=False))
             if time.time() >= deadline:
