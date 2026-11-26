@@ -39,9 +39,9 @@ jobs:
       - id: p
         run: |
           if [ -n "${{ inputs.image }}" ]; then echo 'images=["${{ inputs.image }}"]' >> "$GITHUB_OUTPUT"; exit 0; fi
-          # A change to the shared SSH-environment step (tools/keep_image_env.*: the script and its Dockerfile lines) changes every image.
-          { git diff --name-only HEAD~1 HEAD -- images/ | cut -d/ -f2
-            git diff --quiet HEAD~1 HEAD -- "tools/keep_image_env.*" || ls images; } | sort -u | python3 -c 'import json,sys;print("images="+json.dumps([l.strip() for l in sys.stdin if l.strip()]))' >> "$GITHUB_OUTPUT"
+          # tools/changed_images.py: comment-only image.yaml edits don't re-release an image; a change to the shared
+          # SSH-environment step (tools/keep_image_env.*: the script and its Dockerfile lines) changes every image.
+          python3 tools/changed_images.py HEAD~1 HEAD >> "$GITHUB_OUTPUT"
   release:
     needs: plan
     if: ${{ needs.plan.outputs.images != '[]' }}

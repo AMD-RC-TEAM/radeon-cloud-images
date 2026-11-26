@@ -39,10 +39,9 @@ jobs:
       - id: c
         name: Changed images
         run: |
-          # Same rule as release: a change to the shared SSH-environment step (tools/keep_image_env.*: the script and its Dockerfile lines) changes every image.
-          { git diff --name-only "origin/${{ github.base_ref }}...HEAD" -- images/ | cut -d/ -f2
-            git diff --quiet "origin/${{ github.base_ref }}...HEAD" -- "tools/keep_image_env.*" || ls images; } | sort -u \
-            | python3 -c 'import json,sys;print("images="+json.dumps([l.strip() for l in sys.stdin if l.strip()]))' >> "$GITHUB_OUTPUT"
+          # Same rule as release (tools/changed_images.py): comment-only image.yaml edits need no smoke, and a change to the
+          # shared SSH-environment step (tools/keep_image_env.*) changes every image.
+          python3 tools/changed_images.py "$(git merge-base "origin/${{ github.base_ref }}" HEAD)" HEAD >> "$GITHUB_OUTPUT"
   smoke:
     needs: validate
     runs-on: [self-hosted, radeon-images]
