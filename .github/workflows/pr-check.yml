@@ -4,7 +4,10 @@ name: pr-check
 on:
   pull_request:
     branches: [main]
-permissions: {contents: read}
+permissions: {contents: read, actions: read}
+# release.py's reaper asks GitHub whether the run that owns a leftover Job has finished (needs actions: read).
+env:
+  GH_TOKEN: ${{ github.token }}
 jobs:
   validate:
     runs-on: [self-hosted, radeon-images]

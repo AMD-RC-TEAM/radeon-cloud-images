@@ -10,7 +10,10 @@ on:
     inputs:
       image: {description: "image dir under images/", required: true}
 concurrency: {group: "release-${{ github.ref }}", cancel-in-progress: false}
-permissions: {contents: read, issues: write}
+permissions: {contents: read, issues: write, actions: read}
+# release.py's reaper asks GitHub whether the run that owns a leftover Job has finished (needs actions: read).
+env:
+  GH_TOKEN: ${{ github.token }}
 jobs:
   plan:
     runs-on: [self-hosted, radeon-images]
