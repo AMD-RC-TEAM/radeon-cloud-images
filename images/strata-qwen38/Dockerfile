@@ -37,9 +37,11 @@ COPY rc_strata.json /opt/venv/etc/jupyter/jupyter_server_config.d/rc_strata.json
 
 # Server settings. It listens on 127.0.0.1 only: inside the instance and through the Jupyter proxy, never directly.
 # No per-instance API key: the gateway replaces the Authorization header with the Jupyter token, so access control is
-# the gateway's per-instance login (design decision, approved 11-25); the Host check allows the local proxy.
+# the gateway's per-instance login (design decision, approved 11-25). STRATA_ALLOWED_HOSTS="*": without a key the server
+# answers only listed Host headers (a DNS-rebinding guard), and jupyter-server-proxy may forward the instance's public
+# Host, which would turn every proxied call into a 403. Safe here because the server listens on 127.0.0.1 only.
 ENV B0_MODEL=/models/qwen38-flash-next-iq3xxs B0_APP=/opt/strata/control B0_PY=/opt/strata/venv/bin/python \
-    B0_HOST=127.0.0.1 B0_PORT=8080 B0_LOG=/tmp/b0-logs STRATA_ALLOWED_HOSTS=127.0.0.1,localhost \
+    B0_HOST=127.0.0.1 B0_PORT=8080 B0_LOG=/tmp/b0-logs STRATA_ALLOWED_HOSTS="*" \
     HSA_DISABLE_COREDUMP_ON_EXCEPTION=1 SHELL=/bin/bash
 
 # Keep the image toolchain environment in SSH sessions; see keep_image_env.sh. Last step: after every ENV.

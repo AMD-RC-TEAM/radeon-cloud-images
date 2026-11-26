@@ -26,6 +26,21 @@ for i in $(seq 1 60); do curl -sf "http://127.0.0.1:18888/api/status?token=smoke
 curl -sf "http://127.0.0.1:18888/api/status?token=smoke" >/dev/null || { tail -40 "$log"; echo "FAIL: jupyter server did not start"; exit 1; }
 grep -q "model not mounted" "$t/b0/autostart.log" || { cat "$t/b0/autostart.log" 2>/dev/null; echo "FAIL: autostart did not record the missing model"; exit 1; }
 test -z "$(ls -A "$t" | grep -vE "^(jupyter.log|b0)$")" || { ls -A "$t"; echo "FAIL: the image wrote files into the notebook root"; exit 1; }
+# What the server behind the proxy sees: a tiny echo server on 8080 stands in for the engine (no model in CI).
+python3 -c '
+import http.server, json
+class H(http.server.BaseHTTPRequestHandler):
+    def do_GET(self):
+        b = json.dumps({"path": self.path, "host": self.headers.get("Host")}).encode()
+        self.send_response(200); self.send_header("Content-Type", "application/json"); self.end_headers(); self.wfile.write(b)
+    def log_message(self, *a): pass
+http.server.HTTPServer(("127.0.0.1", 8080), H).serve_forever()' &
+ECHO=$!; sleep 1
+seen=$(curl -sf -H "Host: instance.example" "http://127.0.0.1:18888/proxy/8080/v1/models?token=smoke") || { kill $ECHO; echo "FAIL: proxy did not reach the server on 8080"; exit 1; }
+kill $ECHO; wait $ECHO 2>/dev/null || true
+echo "behind the proxy the server sees: $seen"
+grep -q '"path": "/v1/models' <<<"$seen" || { echo "FAIL: proxy did not strip /proxy/8080/"; exit 1; }
+test "$(printenv STRATA_ALLOWED_HOSTS)" = "*" || { echo "FAIL: STRATA_ALLOWED_HOSTS must be * (the forwarded Host may be the instance's)"; exit 1; }
 code=$(curl -s -o /dev/null -w '%{http_code}' "http://127.0.0.1:18888/proxy/8080/health?token=smoke")
 case "$code" in 5*) echo "proxy route answers ($code: nothing on 8080 without a model, as expected)";; *) echo "FAIL: proxy route gave $code"; exit 1;; esac
 pkill -f "jupyter-server --no-browser --port 18888|jupyter server --no-browser --port 18888" || true; rm -rf "$t"
