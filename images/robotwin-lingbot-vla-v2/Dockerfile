@@ -65,6 +65,8 @@ RUN chmod 0755 /usr/local/bin/robotwin-env && \
     ln -sf /usr/local/bin/robotwin-env /etc/profile.d/robotwin-env.sh
 
 ARG AITER_VERSION=0.1.1.dev1+g9bab8388c
+# flash-attention: FLASH_ATTENTION_FORCE_BUILD installs from the fetched source instead of first guessing a prebuilt
+# wheel on github.com. Triton AMD mode compiles nothing; the guess failed on a dropped GitHub connection in CI (11-27).
 RUN python3 /tmp/fetch_src.py ROCm/aiter "${AITER_COMMIT}" /opt/aiter && \
     cd /opt/aiter && \
     sed -i '/flydsl==0.1.9.dev599/d' pyproject.toml && \
@@ -77,6 +79,7 @@ RUN python3 /tmp/fetch_src.py ROCm/aiter "${AITER_COMMIT}" /opt/aiter && \
     GPU_ARCHS="${AITER_GPU_ARCHS}" \
     FLASH_ATTENTION_TRITON_AMD_ENABLE=TRUE \
     FLASH_ATTENTION_USE_SYSTEM_AITER=TRUE \
+    FLASH_ATTENTION_FORCE_BUILD=TRUE \
         /opt/robotwin-env/bin/python -m pip install \
         --no-build-isolation --no-deps . && \
     cd / && rm -rf /tmp/flash-attention
