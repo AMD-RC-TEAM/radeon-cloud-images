@@ -1,0 +1,7 @@
+# Release settings for this image (read by tools/release.py and tools/upstream_check.py).
+name: dream-circuit-lap
+rc_repo: rc/dream-circuit-lap        # Harbor: 10.5.10.12:1808/radeon-cloud-global/rc/dream-circuit-lap:rc-current is what the catalog row tracks
+catalog_row: "Dream Circuit Lap"     # the stable catalog row only; template rows are never touched
+smoke: dream-circuit-lap             # runs images/dream-circuit-lap/smoke.sh
+upstream:            # the registry/repo come from the Dockerfile's FROM line
+  tag_regex: '^rocm7\.[0-9]+\.[0-9]+_ubuntu24\.04_py3\.12_pytorch_release_2\.[0-9]+\.[0-9]+$'   # follows images/comfyui's base; ComfyUI is pinned by COMFYUI_COMMIT
