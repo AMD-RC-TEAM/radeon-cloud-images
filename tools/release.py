@@ -34,6 +34,26 @@ def sh(*cmd, check=True, **kw):
 FROM_RE = re.compile(r"^FROM\s+(?P<ref>(?P<registry>[^/\s]+)/(?P<repo>\S+?):(?P<tag>[^:@/\s]+)@(?P<digest>sha256:[0-9a-f]{64}))\s*$", re.M)
 
 
+# Every image gets the same last build step: keep the image's toolchain environment in SSH sessions (the platform's
+# sshd starts sessions with a minimal environment; see tools/keep_image_env.sh). It is added here, from one shared
+# copy, so no image directory carries the script and a new image cannot miss it; the smoke checks it for every image.
+KEEP_ENV_SCRIPT = os.path.join(ROOT, "tools", "keep_image_env.sh")
+KEEP_ENV_NAME = "rc-keep-image-env.sh"   # its name in the build context
+
+
+def with_keep_env_step(df):
+    """The Dockerfile plus the shared SSH-environment step, as the final step (after every ENV). If the Dockerfile
+    switches USER, the step runs as root and the last USER is restored."""
+    users = re.findall(r"^USER\s+(\S+)", df, re.M)
+    step = ["", "# Added by tools/release.py to every image: keep this image's environment in SSH sessions."]
+    if users:
+        step.append("USER root")
+    step += [f"COPY {KEEP_ENV_NAME} /tmp/{KEEP_ENV_NAME}", f"RUN sh /tmp/{KEEP_ENV_NAME} && rm -f /tmp/{KEEP_ENV_NAME}"]
+    if users:
+        step.append(f"USER {users[-1]}")
+    return df.rstrip("\n") + "\n" + "\n".join(step) + "\n"
+
+
 def parse(image):
     """images/<image>/Dockerfile must FROM the real public upstream, pinned: FROM <registry>/<repo>:<tag>@sha256:<digest>.
     The tooling mirrors that digest into Harbor on demand and builds/smokes from the Harbor copy, so cluster nodes
@@ -46,7 +66,6 @@ def parse(image):
                          "(the public upstream, e.g. docker.io/rocm/pytorch:<tag>@sha256:...)")
     if frm["registry"].startswith(("10.5.10.12", "36.150.116.202")) or len(FROM_RE.findall(df)) > 1:
         raise SystemExit(f"{image}: FROM must name the public upstream once, not our Harbor (the tooling mirrors it)")
-    build_steps = [l for l in df.splitlines() if l.strip() and not l.lstrip().startswith("#") and not l.startswith("FROM")]
     cfg = {}
     for l in open(os.path.join(d, "image.yaml")):
         m = re.match(r"^(\w+):\s*(.*?)\s*(?:#.*)?$", l)
@@ -57,7 +76,7 @@ def parse(image):
     harbor_ref = f"{PULL}/{mirror_repo}@{frm['digest']}"
     return {"dir": d, "registry": reg, "repo": frm["repo"], "tag": frm["tag"], "digest": frm["digest"],
             "from": frm["ref"], "mirror_repo": mirror_repo, "harbor_ref": harbor_ref,
-            "build_dockerfile": df.replace(frm["ref"], harbor_ref, 1), "build": bool(build_steps), **cfg}
+            "build_dockerfile": with_keep_env_step(df.replace(frm["ref"], harbor_ref, 1)), "build": True, **cfg}
 
 
 def ensure_mirror(m):
@@ -76,10 +95,12 @@ def ensure_mirror(m):
 
 
 def context_files(m):
-    """Everything in the image directory except the release settings and the smoke script.
+    """Everything in the image directory except the release settings and the smoke script, plus the shared
+    SSH-environment script (with_keep_env_step).
     Returns sorted (name in the context, local path)."""
-    return sorted((f, os.path.join(m["dir"], f)) for f in os.listdir(m["dir"])
-                  if f not in ("image.yaml", "smoke.sh") and os.path.isfile(os.path.join(m["dir"], f)))
+    files = [(f, os.path.join(m["dir"], f)) for f in os.listdir(m["dir"])
+             if f not in ("image.yaml", "smoke.sh") and os.path.isfile(os.path.join(m["dir"], f))]
+    return sorted(files + [(KEEP_ENV_NAME, KEEP_ENV_SCRIPT)])
 
 
 def context_tag(m):
@@ -241,7 +262,9 @@ def _smoke_in(ns, m, candidate):
 
 
 # The smoke ends with the versions probe; its RC-VERSIONS line is the source of the picker description (D-20261114-08).
-VERSIONS_AFTER_SMOKE = "/bin/bash /smoke/smoke.sh && { python3 /smoke/versions_probe.py || echo 'RC-VERSIONS {}'; }"
+# Every image: the shared SSH-environment check first (the step with_keep_env_step adds), then the image's own smoke.
+VERSIONS_AFTER_SMOKE = ("/bin/bash -c '. /smoke/smoke_lib.sh && ssh_keeps_image_env' && /bin/bash /smoke/smoke.sh"
+                        " && { python3 /smoke/versions_probe.py || echo 'RC-VERSIONS {}'; }")
 VERSIONS_RE = re.compile(r"^RC-VERSIONS (\{.*\})\s*$", re.M)
 
 

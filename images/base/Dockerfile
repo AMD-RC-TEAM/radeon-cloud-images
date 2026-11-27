@@ -30,6 +30,4 @@ ENV SHELL=/bin/bash
 # Remove when hipBLASLt matches rocBLAS on gfx1100 at all sizes (re-measure with torch_gemm_floor and bigger shapes).
 ENV TORCH_BLAS_PREFER_HIPBLASLT=0
 
-# Keep the image toolchain environment (PATH, LD_LIBRARY_PATH, ROCm settings) in SSH sessions; see keep_image_env.sh. Last step: after every ENV.
-COPY keep_image_env.sh /tmp/keep_image_env.sh
-RUN sh /tmp/keep_image_env.sh && rm -f /tmp/keep_image_env.sh
+# SSH sessions keep this image's environment: tools/release.py adds that step to every image (tools/keep_image_env.sh).
