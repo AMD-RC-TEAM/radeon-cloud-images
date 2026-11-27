@@ -14,6 +14,10 @@ RUN sh /tmp/add_zstd.sh && rm -f /tmp/add_zstd.sh
 # Ollama from its GitHub release (https://github.com/ollama/ollama/releases): ollama-linux-amd64.tar.zst and
 # ollama-linux-amd64-rocm.tar.zst, extracted into /usr, pinned by version and SHA-256 (the digests GitHub shows for
 # each asset). The README goes to /opt/ollama.
+# The release archives (~2.5 GB) are downloaded through this proxy first: direct downloads from github.com ran at
+# ~100 KB/s from the build cluster (about 6.6 h). Then github.com directly. Either way the file is checked by sha256.
+# Set it empty to use github.com only.
+ARG GITHUB_PROXY=https://gh-proxy.com/
 ARG OLLAMA_VERSION=0.40.18
 ARG OLLAMA_AMD64_SHA256=b82649006cb5b54ed1237fa2d1a26a7f939a4fd03150033759acbff7ff315adf
 ARG OLLAMA_ROCM_SHA256=d404a0f936a69ecf7904f228f68cf65021fdf45e4b66db3fb9c8603abd206447
