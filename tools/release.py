@@ -45,6 +45,9 @@ def sh(*cmd, check=True, **kw):
     return r.stdout
 
 
+# Build artifacts that aren't public and don't belong in git (e.g. an engine bundle) come from one-file images in our
+# Harbor under rc-artifacts/. Dockerfiles write `COPY --from=rc-artifacts/<name>@sha256:...`; the build points it at Harbor.
+ARTIFACT_RE = re.compile(r"(--from=)rc-artifacts/")
 FROM_RE = re.compile(r"^FROM\s+(?P<ref>(?P<registry>[^/\s]+)/(?P<repo>\S+?):(?P<tag>[^:@/\s]+)@(?P<digest>sha256:[0-9a-f]{64}))\s*$", re.M)
 
 
@@ -91,9 +94,11 @@ def parse(image):
     reg = frm["registry"]
     mirror_repo = frm["repo"] if reg == "docker.io" else f"{reg}/{frm['repo']}"
     harbor_ref = f"{PULL}/{mirror_repo}@{frm['digest']}"
+    if any(ref.split("/")[0] in df for ref in (PULL, PUSH)):
+        raise SystemExit(f"{image}: the Dockerfile must not name our registry; write rc-artifacts/<name>@sha256:... for build artifacts")
     return {"dir": d, "registry": reg, "repo": frm["repo"], "tag": frm["tag"], "digest": frm["digest"],
             "from": frm["ref"], "mirror_repo": mirror_repo, "harbor_ref": harbor_ref,
-            "build_dockerfile": with_keep_env_step(df.replace(frm["ref"], harbor_ref, 1)), "build": True, **cfg}
+            "build_dockerfile": with_keep_env_step(ARTIFACT_RE.sub(lambda x: f"{x.group(1)}{PULL}/rc-artifacts/", df.replace(frm["ref"], harbor_ref, 1))), "build": True, **cfg}
 
 
 def ensure_mirror(m):

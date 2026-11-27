@@ -74,3 +74,17 @@ If you have no GPU, run steps 1 and 2. The PR check runs the smoke test for you.
    old one. Running instances keep the image they started with. Templates are never changed by a release.
 5. If anything fails, nothing is published and the current version stays. The `rollback` workflow (Actions tab)
    switches an image back to its previous version.
+
+## Build inputs from Harbor
+
+An image's own build inputs come from its directory or from a pinned public upstream. One exception: a build artifact
+that isn't public and doesn't belong in git (today: the Strata engine bundle for `strata-qwen38`) may come from a
+one-file image in our Harbor, written as `COPY --from=rc-artifacts/<name>@sha256:…`. As with `FROM`, the Dockerfile names
+no registry: `tools/release.py` points `rc-artifacts/` at Harbor when it builds, and refuses Dockerfiles that name it.
+The Dockerfile says where the artifact came from and re-checks its sha256 during the build.
+
+- **Backup:** every artifact also has a sha256-checked copy in rc-images' lane directory, which backup-dr syncs daily to
+  its encrypted store. Pushing that copy back reproduces the same image digest, so no Dockerfile change is needed.
+- **Update:** the producing lane builds the new artifact from a pinned source commit and publishes its sha256 →
+  rc-images checks it, pushes it under a new tag, and keeps the backup copy → a PR changes the version, sha256 and
+  digest lines in the Dockerfile → re-test where it runs + CI smoke → second reader → merge.

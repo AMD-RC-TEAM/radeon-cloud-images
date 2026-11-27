@@ -1,0 +1,8 @@
+{
+  "ServerApp": {
+    "jpserver_extensions": {
+      "jupyter_server_proxy": true,
+      "rc_strata_autostart": true
+    }
+  }
+}
