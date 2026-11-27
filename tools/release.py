@@ -94,6 +94,13 @@ def context_tag(m):
     return "ctx-" + h.hexdigest()[:20]
 
 
+# Kaniko build time limit. Builds have no layer cache and snapshot the whole filesystem after each RUN, so a big
+# image's from-scratch build is slow: comfyui (ROCm 7.14 base, ~20 GB) took ~85 min on 11-24, and one more RUN step
+# pushed it past the old 90-min limit (images#43, 11-25). At 120 min it built in ~116, too close to rely on, so 180.
+# Lower it again once builds get a layer cache (planned).
+BUILD_DEADLINE_S = 10800
+
+
 def build(m):
     """Build the image with Kaniko, or reuse an earlier build of the same context. Returns (repo, digest)."""
     repo, tag = f"build/{m['name']}", context_tag(m)
@@ -118,7 +125,7 @@ def build(m):
             "-o", "name").strip()
     labels = {"app.kubernetes.io/part-of": "radeon-cloud-images"}
     job = {"apiVersion": "batch/v1", "kind": "Job", "metadata": {"name": name, "namespace": BUILD_NS, "labels": labels},
-           "spec": {"backoffLimit": 0, "activeDeadlineSeconds": 5400, "ttlSecondsAfterFinished": 3600, "template": {
+           "spec": {"backoffLimit": 0, "activeDeadlineSeconds": BUILD_DEADLINE_S, "ttlSecondsAfterFinished": 3600, "template": {
                "metadata": {"labels": labels},
                "spec": {"restartPolicy": "Never",
                         "containers": [{"name": "kaniko", "image": KANIKO, "args": [
@@ -138,7 +145,9 @@ def build(m):
     subprocess.run(["kubectl", "apply", "-f", "-"], input=json.dumps(job), text=True, check=True, capture_output=True)
     print(f"build: Kaniko job {BUILD_NS}/{name} -> {repo}:{tag}")
     try:
-        ok, deadline = False, time.time() + 5500
+        # Stop polling 120 s before the Job's own deadline (as smoke() does): at the deadline Kubernetes deletes the
+        # pod, and with it the build log printed below (11-26: images#50's timed-out build left no log).
+        ok, deadline = False, time.time() + BUILD_DEADLINE_S - 120
         while time.time() < deadline:
             st = json.loads(sh("kubectl", "-n", BUILD_NS, "get", "job", name, "-o", "json")).get("status", {})
             if st.get("succeeded"):
@@ -149,6 +158,8 @@ def build(m):
         print(sh("kubectl", "-n", BUILD_NS, "logs", f"job/{name}", "--tail=60", check=False))
         if not ok:
             print(sh("kubectl", "-n", BUILD_NS, "get", "pods", "-l", f"job-name={name}", "-o", "wide", check=False))
+            if time.time() >= deadline:
+                raise SystemExit(f"build for {m['name']} did not finish within {BUILD_DEADLINE_S // 60} min (log above)")
             raise SystemExit(f"build failed for {m['name']}")
     finally:
         sh("kubectl", "-n", BUILD_NS, "delete", "job", name, "--wait=true", "--timeout=180s", check=False)
