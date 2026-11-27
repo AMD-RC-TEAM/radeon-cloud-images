@@ -145,7 +145,9 @@ def build(m):
     subprocess.run(["kubectl", "apply", "-f", "-"], input=json.dumps(job), text=True, check=True, capture_output=True)
     print(f"build: Kaniko job {BUILD_NS}/{name} -> {repo}:{tag}")
     try:
-        ok, deadline = False, time.time() + BUILD_DEADLINE_S + 100   # a little past the Job's own deadline
+        # Stop polling 120 s before the Job's own deadline (as smoke() does): at the deadline Kubernetes deletes the
+        # pod, and with it the build log printed below (11-26: images#50's timed-out build left no log).
+        ok, deadline = False, time.time() + BUILD_DEADLINE_S - 120
         while time.time() < deadline:
             st = json.loads(sh("kubectl", "-n", BUILD_NS, "get", "job", name, "-o", "json")).get("status", {})
             if st.get("succeeded"):
@@ -156,6 +158,8 @@ def build(m):
         print(sh("kubectl", "-n", BUILD_NS, "logs", f"job/{name}", "--tail=60", check=False))
         if not ok:
             print(sh("kubectl", "-n", BUILD_NS, "get", "pods", "-l", f"job-name={name}", "-o", "wide", check=False))
+            if time.time() >= deadline:
+                raise SystemExit(f"build for {m['name']} did not finish within {BUILD_DEADLINE_S // 60} min (log above)")
             raise SystemExit(f"build failed for {m['name']}")
     finally:
         sh("kubectl", "-n", BUILD_NS, "delete", "job", name, "--wait=true", "--timeout=180s", check=False)
