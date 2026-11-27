@@ -9,6 +9,9 @@ A merged PR is built, smoke-tested on a Radeon W7900D GPU and released to users 
    `@sha256:` digest in the `FROM` line. For a pip package, change its pinned version.
 2. **New image:** copy `docs/image-template/` to `images/<name>/` and fill in `Dockerfile`, `image.yaml` and
    `smoke.sh`. The template's comments say what goes where.
+   You don't add SSH environment handling: `tools/release.py` appends one shared step (`tools/keep_image_env.sh`)
+   to every image's build (so every image is built, even one that only mirrors an upstream image), and the smoke
+   checks it for every image. A local `docker build` doesn't include that step.
 3. Check it locally (below), then open a PR against `main`. In the description, say what changed and why, and link the
    upstream release notes for a version bump.
 4. A bot also opens upgrade branches when an upstream image has a newer tag. Review those like any other PR.

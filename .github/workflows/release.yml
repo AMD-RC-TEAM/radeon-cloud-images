@@ -5,7 +5,7 @@ name: release
 on:
   push:
     branches: [main]
-    paths: ["images/**"]
+    paths: ["images/**", "tools/keep_image_env.*"]   # the shared SSH step is part of every image (release.py)
   workflow_dispatch:
     inputs:
       image: {description: "image dir under images/", required: true}
@@ -33,7 +33,9 @@ jobs:
       - id: p
         run: |
           if [ -n "${{ inputs.image }}" ]; then echo 'images=["${{ inputs.image }}"]' >> "$GITHUB_OUTPUT"; exit 0; fi
-          git diff --name-only HEAD~1 HEAD -- images/ | cut -d/ -f2 | sort -u | python3 -c 'import json,sys;print("images="+json.dumps([l.strip() for l in sys.stdin if l.strip()]))' >> "$GITHUB_OUTPUT"
+          # A change to the shared SSH-environment step (tools/keep_image_env.*: the script and its Dockerfile lines) changes every image.
+          { git diff --name-only HEAD~1 HEAD -- images/ | cut -d/ -f2
+            git diff --quiet HEAD~1 HEAD -- "tools/keep_image_env.*" || ls images; } | sort -u | python3 -c 'import json,sys;print("images="+json.dumps([l.strip() for l in sys.stdin if l.strip()]))' >> "$GITHUB_OUTPUT"
   release:
     needs: plan
     if: ${{ needs.plan.outputs.images != '[]' }}

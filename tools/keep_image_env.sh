@@ -18,6 +18,9 @@ snippet=/etc/profile.d/zz-rc-image-env.sh
 LISTS="PATH LD_LIBRARY_PATH LIBRARY_PATH PYTHONPATH CPATH PKG_CONFIG_PATH"
 VALUE_RE='^(VIRTUAL_ENV|CONDA_[A-Z0-9_]+|ROCM_[A-Z0-9_]+|HIP_[A-Z0-9_]+|HSA_[A-Z0-9_]+|HCC_[A-Z0-9_]+|MIOPEN_[A-Z0-9_]+|PYTORCH_[A-Z0-9_]+|TORCH_[A-Z0-9_]+|VLLM_[A-Z0-9_]+|SGLANG_[A-Z0-9_]+|AMDGPU_[A-Z0-9_]+|GPU_[A-Z0-9_]+|NCCL_[A-Z0-9_]+|RCCL_[A-Z0-9_]+|LANG|LC_ALL)$'
 SECRET_RE='(KEY|TOKEN|SECRET|PASSWORD)'
+# Build arguments are visible to RUN steps as variables but are not the image's environment; release.py passes
+# their names (minus any also set by ENV) so they are never kept, whatever their name.
+SKIP=" ${RC_KEEP_ENV_SKIP:-} "
 safe() { case "$1" in *[!A-Za-z0-9/._:+,=@-]*) return 1 ;; esac; return 0; }
 mkdir -p "$root/etc/profile.d"
 {
@@ -32,6 +35,7 @@ mkdir -p "$root/etc/profile.d"
     echo "_rc_add_list $n \"$v\""
   done
   env | sed -n 's/^\([A-Za-z_][A-Za-z0-9_]*\)=.*/\1/p' | grep -E "$VALUE_RE" | grep -vE "$SECRET_RE" | sort -u | while read -r n; do
+    case "$SKIP" in *" $n "*) continue ;; esac
     eval "v=\${$n}"
     safe "$v" || { echo "keep_image_env.sh: skipping $n (unexpected characters)" >&2; continue; }
     echo "[ -n \"\${$n+x}\" ] || export $n=\"$v\""

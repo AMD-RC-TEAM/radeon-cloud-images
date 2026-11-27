@@ -33,7 +33,9 @@ jobs:
       - id: c
         name: Changed images
         run: |
-          git diff --name-only "origin/${{ github.base_ref }}...HEAD" -- images/ | cut -d/ -f2 | sort -u \
+          # Same rule as release: a change to the shared SSH-environment step (tools/keep_image_env.*: the script and its Dockerfile lines) changes every image.
+          { git diff --name-only "origin/${{ github.base_ref }}...HEAD" -- images/ | cut -d/ -f2
+            git diff --quiet "origin/${{ github.base_ref }}...HEAD" -- "tools/keep_image_env.*" || ls images; } | sort -u \
             | python3 -c 'import json,sys;print("images="+json.dumps([l.strip() for l in sys.stdin if l.strip()]))' >> "$GITHUB_OUTPUT"
   smoke:
     needs: validate

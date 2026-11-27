@@ -1,0 +1,3 @@
+# Added by tools/release.py to every image: keep this image's environment in SSH sessions (tools/keep_image_env.sh).
+COPY rc-keep-image-env.sh /tmp/rc-keep-image-env.sh
+RUN {skip}sh /tmp/rc-keep-image-env.sh && rm -f /tmp/rc-keep-image-env.sh
