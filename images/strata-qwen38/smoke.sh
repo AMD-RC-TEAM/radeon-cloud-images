@@ -20,6 +20,16 @@ test -z "$(find /opt/strata /opt/b0 /workspace -name "*.ipynb" 2>/dev/null | hea
 ext=$(jupyter server extension list 2>&1)
 grep -qE 'rc_strata_autostart .*enabled' <<<"$ext" || { echo "FAIL: rc_strata_autostart not enabled"; echo "$ext"; exit 1; }
 grep -qE 'jupyter_server_proxy .*enabled' <<<"$ext" || { echo "FAIL: jupyter_server_proxy not enabled"; echo "$ext"; exit 1; }
+# Model dir: the mount itself, or its single versioned subdir (Admin prewarm puts manual models in <mount>/v1/).
+python3 -c '
+import os, tempfile, rc_strata_autostart as a
+r = tempfile.mkdtemp()
+flat = os.path.join(r, "flat"); os.makedirs(flat + "/gguf")
+ver = os.path.join(r, "ver"); os.makedirs(ver + "/v1/gguf")
+two = os.path.join(r, "two"); os.makedirs(two + "/v1/gguf"); os.makedirs(two + "/v2/gguf")
+assert a.model_dir(flat) == flat and a.model_dir(ver) == ver + "/v1" and a.model_dir(two) == two, "model_dir"
+assert a.model_dir(r + "/missing") == r + "/missing"
+' || { echo "FAIL: model dir resolution"; exit 1; }
 t=$(mktemp -d); log=$t/jupyter.log
 (cd "$t" && B0_MODEL=$t/no-model B0_LOG=$t/b0 jupyter server --no-browser --allow-root --ServerApp.allow_remote_access=True --port 18888 --IdentityProvider.token=smoke --ServerApp.root_dir="$t" >"$log" 2>&1 &)
 for i in $(seq 1 60); do curl -sf "http://127.0.0.1:18888/api/status?token=smoke" >/dev/null && break; sleep 1; done
