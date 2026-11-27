@@ -39,6 +39,7 @@ FROM_RE = re.compile(r"^FROM\s+(?P<ref>(?P<registry>[^/\s]+)/(?P<repo>\S+?):(?P<
 # copy, so no image directory carries the script and a new image cannot miss it; the smoke checks it for every image.
 KEEP_ENV_SCRIPT = os.path.join(ROOT, "tools", "keep_image_env.sh")
 KEEP_ENV_NAME = "rc-keep-image-env.sh"   # its name in the build context
+KEEP_ENV_STEP = os.path.join(ROOT, "tools", "keep_image_env.step")   # the Dockerfile lines added (template)
 
 
 def with_keep_env_step(df):
@@ -50,13 +51,8 @@ def with_keep_env_step(df):
     args = set(re.findall(r"^ARG\s+([A-Za-z_][A-Za-z0-9_]*)", df, re.M))
     envs = set(re.findall(r"^ENV\s+([A-Za-z_][A-Za-z0-9_]*)", df, re.M))
     skip = " ".join(sorted(args - envs))   # build arguments are not the image's environment
-    step = ["", "# Added by tools/release.py to every image: keep this image's environment in SSH sessions."]
-    if users:
-        step.append("USER root")
-    run = f"sh /tmp/{KEEP_ENV_NAME}" if not skip else f'RC_KEEP_ENV_SKIP="{skip}" sh /tmp/{KEEP_ENV_NAME}'
-    step += [f"COPY {KEEP_ENV_NAME} /tmp/{KEEP_ENV_NAME}", f"RUN {run} && rm -f /tmp/{KEEP_ENV_NAME}"]
-    if users:
-        step.append(f"USER {users[-1]}")
+    text = open(KEEP_ENV_STEP).read().format(skip=f'RC_KEEP_ENV_SKIP="{skip}" ' if skip else "").rstrip("\n")
+    step = [""] + (["USER root"] if users else []) + text.splitlines() + ([f"USER {users[-1]}"] if users else [])
     return df.rstrip("\n") + "\n" + "\n".join(step) + "\n"
 
 
