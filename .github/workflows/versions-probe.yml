@@ -7,7 +7,10 @@ on:
     inputs:
       refs: {description: "space-separated <name>=<registry/repo@sha256:...> pairs", required: true}
 concurrency: {group: "versions-probe", cancel-in-progress: false}
-permissions: {contents: read}
+permissions: {contents: read, actions: read}
+# release.py's reaper asks GitHub whether the run that owns a leftover Job has finished (needs actions: read).
+env:
+  GH_TOKEN: ${{ github.token }}
 jobs:
   probe:
     runs-on: [self-hosted, radeon-images]

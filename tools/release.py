@@ -10,7 +10,7 @@ steps is built with Kaniko in the runner namespace (no GPU) into build/<image>:c
 context that was already built (for example by the PR check) is reused, so the release ships the digest that passed
 the smoke.
 """
-import argparse, hashlib, io, json, os, re, subprocess, sys, tarfile, time, tempfile
+import argparse, hashlib, io, json, os, re, signal, subprocess, sys, tarfile, time, tempfile, urllib.request
 sys.path.insert(0, os.path.dirname(__file__))
 import harbor  # noqa: E402
 
@@ -124,6 +124,59 @@ def context_tag(m):
 BUILD_DEADLINE_S = 10800
 
 
+# Every Job we create carries the GitHub run that owns it, so a later run can clean up after a cancelled one.
+RUN_ID = f"{os.environ.get('GITHUB_RUN_ID', 'local')}-{os.environ.get('GITHUB_RUN_ATTEMPT', '0')}"
+SMOKE_MAX = int(os.environ.get("RC_SMOKE_MAX_CONCURRENT", "2"))  # GPUs image smokes may hold on the CI node at once
+
+
+def job_labels(kind):
+    return {"app.kubernetes.io/part-of": "radeon-cloud-images", "radeon-cloud-images/kind": kind,
+            "radeon-cloud-images/run": RUN_ID}
+
+
+def reap_stale_jobs():
+    """Delete our Jobs (and their ConfigMaps) whose GitHub run is no longer in progress: a cancelled run cannot clean up
+    after itself if it was killed before its finally blocks. Asks GitHub only; if that fails, reaps nothing."""
+    repo, token = os.environ.get("GITHUB_REPOSITORY"), os.environ.get("GH_TOKEN") or os.environ.get("GITHUB_TOKEN")
+    if not repo or not token:
+        return
+    out = sh("kubectl", "-n", BUILD_NS, "get", "jobs", "-l", "radeon-cloud-images/run", "-o", "json", check=False)
+    jobs = json.loads(out).get("items", []) if out.strip() else []
+    status = {}
+    for j in jobs:
+        run = j["metadata"]["labels"].get("radeon-cloud-images/run", "")
+        if run == RUN_ID or not run.split("-")[0].isdigit():
+            continue
+        if run not in status:
+            try:
+                req = urllib.request.Request(f"https://api.github.com/repos/{repo}/actions/runs/{run.split('-')[0]}",
+                                             headers={"Authorization": f"Bearer {token}", "Accept": "application/vnd.github+json"})
+                status[run] = json.loads(urllib.request.urlopen(req, timeout=20).read()).get("status")
+            except Exception as e:      # noqa: BLE001 (no answer = leave it alone)
+                print(f"reaper: could not ask GitHub about run {run}: {e}"); status[run] = None
+        if status[run] == "completed":
+            name = j["metadata"]["name"]
+            print(f"reaper: deleting {name} (its run {run} has finished)")
+            sh("kubectl", "-n", BUILD_NS, "delete", "job", name, "--wait=false", check=False)
+            sh("kubectl", "-n", BUILD_NS, "delete", "configmap", name, "--ignore-not-found", check=False)
+
+
+def wait_for_smoke_capacity(limit_s=7200):
+    """At most SMOKE_MAX image smokes hold CI-node GPUs at once; the rest wait here (the node is shared with RCI CI).
+    Two runs can pass this check at the same moment, so the cap can be exceeded by one for a short while."""
+    deadline = time.time() + limit_s
+    while True:
+        out = sh("kubectl", "-n", BUILD_NS, "get", "jobs", "-l", "radeon-cloud-images/kind=smoke", "-o", "json", check=False)
+        active = [j for j in (json.loads(out).get("items", []) if out.strip() else [])
+                  if not any(c.get("status") == "True" and c.get("type") in ("Complete", "Failed")
+                             for c in j.get("status", {}).get("conditions", []))]
+        if len(active) < SMOKE_MAX:
+            return
+        if time.time() > deadline:
+            raise SystemExit(f"smoke: {len(active)} image smokes still running after {limit_s} s (cap {SMOKE_MAX})")
+        print(f"smoke: waiting, {len(active)} image smokes already running (cap {SMOKE_MAX})"); time.sleep(30)
+
+
 def build(m):
     """Build the image with Kaniko, or reuse an earlier build of the same context. Returns (repo, digest)."""
     repo, tag = f"build/{m['name']}", context_tag(m)
@@ -146,11 +199,11 @@ def build(m):
         f.write(buf.getvalue())
     cm = sh("kubectl", "-n", BUILD_NS, "create", "configmap", name, f"--from-file=context.tar.gz={tmp}/context.tar.gz",
             "-o", "name").strip()
-    labels = {"app.kubernetes.io/part-of": "radeon-cloud-images"}
+    labels = job_labels("build")
     job = {"apiVersion": "batch/v1", "kind": "Job", "metadata": {"name": name, "namespace": BUILD_NS, "labels": labels},
            "spec": {"backoffLimit": 0, "activeDeadlineSeconds": BUILD_DEADLINE_S, "ttlSecondsAfterFinished": 3600, "template": {
                "metadata": {"labels": labels},
-               "spec": {"restartPolicy": "Never",
+               "spec": {"restartPolicy": "Never", "automountServiceAccountToken": False,
                         "containers": [{"name": "kaniko", "image": KANIKO, "args": [
                             "--context=tar:///context/context.tar.gz", "--dockerfile=Dockerfile",
                             f"--destination={PUSH}/{repo}:{tag}", "--digest-file=/dev/termination-log",
@@ -185,7 +238,7 @@ def build(m):
                 raise SystemExit(f"build for {m['name']} did not finish within {BUILD_DEADLINE_S // 60} min (log above)")
             raise SystemExit(f"build failed for {m['name']}")
     finally:
-        sh("kubectl", "-n", BUILD_NS, "delete", "job", name, "--wait=true", "--timeout=180s", check=False)
+        sh("kubectl", "-n", BUILD_NS, "delete", "job", name, "--wait=false", check=False)
         sh("kubectl", "-n", BUILD_NS, "delete", cm, check=False)
     built = harbor.artifact(repo, tag)
     if not built:
@@ -202,6 +255,7 @@ def smoke(m, candidate):
     58 minutes). The scheduler hands out the node's GPUs; a smoke that cannot get one
     stays Pending and fails at its deadline with the reason printed.
     """
+    wait_for_smoke_capacity()
     _smoke_in(BUILD_NS, m, candidate)
 
 
@@ -212,9 +266,10 @@ def _smoke_in(ns, m, candidate):
             f"--from-file=hk_readme_smoke.sh={ROOT}/tools/hk_readme_smoke.sh",
             f"--from-file=versions_probe.py={ROOT}/tools/versions_probe.py", "-o", "name")
     job = {"apiVersion": "batch/v1", "kind": "Job",
-           "metadata": {"name": name, "namespace": ns, "labels": {"app.kubernetes.io/part-of": "radeon-cloud-images"}},
-           "spec": {"backoffLimit": 0, "activeDeadlineSeconds": 3600, "ttlSecondsAfterFinished": 3600, "template": {"spec": {
-               "restartPolicy": "Never",
+           "metadata": {"name": name, "namespace": ns, "labels": job_labels("smoke")},
+           "spec": {"backoffLimit": 0, "activeDeadlineSeconds": 3600, "ttlSecondsAfterFinished": 3600, "template": {
+               "metadata": {"labels": job_labels("smoke")}, "spec": {
+               "restartPolicy": "Never", "automountServiceAccountToken": False,
                "nodeSelector": {"amd-oneclick.io/workload-ci": "enabled"},
                "containers": [{"name": "smoke", "image": candidate, "command": ["/bin/bash", "-c", VERSIONS_AFTER_SMOKE],
                                "env": [{"name": "SMOKE_MODEL_DIR", "value": "/models/Qwen2.5-0.5B-Instruct"},
@@ -257,7 +312,7 @@ def _smoke_in(ns, m, candidate):
                      "SCHEDULED:.status.conditions[?(@.type=='PodScheduled')].message", check=False))
             print(sh("kubectl", "-n", ns, "describe", "pods", "-l", f"job-name={name}", check=False)[-2500:])
     finally:
-        sh("kubectl", "-n", ns, "delete", "job", name, "--wait=true", "--timeout=180s", check=False)
+        sh("kubectl", "-n", ns, "delete", "job", name, "--wait=false", check=False)
         sh("kubectl", "-n", ns, "delete", cm, check=False)
     if not ok:
         raise SystemExit(f"smoke failed for {candidate}")
@@ -292,13 +347,13 @@ def probe(ref, name="probe"):
     if "@sha256:" not in ref:
         raise SystemExit("probe needs an image reference pinned by digest")
     job_name = f"rcimg-versions-{name}-{int(time.time())}"[:62]
-    labels = {"app.kubernetes.io/part-of": "radeon-cloud-images"}
+    labels = job_labels("probe")
     cm = sh("kubectl", "-n", BUILD_NS, "create", "configmap", job_name,
             f"--from-file=versions_probe.py={ROOT}/tools/versions_probe.py", "-o", "name").strip()
     job = {"apiVersion": "batch/v1", "kind": "Job", "metadata": {"name": job_name, "namespace": BUILD_NS, "labels": labels},
            "spec": {"backoffLimit": 0, "activeDeadlineSeconds": 2400, "ttlSecondsAfterFinished": 3600, "template": {
                "metadata": {"labels": labels},
-               "spec": {"restartPolicy": "Never",
+               "spec": {"restartPolicy": "Never", "automountServiceAccountToken": False,
                         # The CI node already holds the released images, so most probes start without a pull.
                         "nodeSelector": {"amd-oneclick.io/workload-ci": "enabled"},
                         "containers": [{"name": "probe", "image": ref,
@@ -327,7 +382,7 @@ def probe(ref, name="probe"):
         if not ok:
             print(sh("kubectl", "-n", BUILD_NS, "get", "pods", "-l", f"job-name={job_name}", "-o", "wide", check=False))
     finally:
-        sh("kubectl", "-n", BUILD_NS, "delete", "job", job_name, "--wait=true", "--timeout=180s", check=False)
+        sh("kubectl", "-n", BUILD_NS, "delete", "job", job_name, "--wait=false", check=False)
         sh("kubectl", "-n", BUILD_NS, "delete", cm, check=False)
     if not ok or not report_versions(name, ref, logs):
         raise SystemExit(f"versions probe failed for {ref}")
@@ -351,6 +406,10 @@ def main():
     ap.add_argument("--smoke-only", action="store_true", help="PR check: mirror + smoke, no rc-current move, no catalog")
     ap.add_argument("--probe", action="store_true", help="only print the versions of an existing digest (no GPU)")
     a = ap.parse_args()
+    # GitHub cancels a run with SIGTERM. Exit normally on it, so the finally blocks delete this run's Jobs.
+    signal.signal(signal.SIGTERM, lambda *_: sys.exit(143))
+    if not a.dry_run:
+        reap_stale_jobs()
     if a.probe:
         failed = []
         for item in a.image.split():
