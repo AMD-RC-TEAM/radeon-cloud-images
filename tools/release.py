@@ -42,13 +42,19 @@ KEEP_ENV_NAME = "rc-keep-image-env.sh"   # its name in the build context
 
 
 def with_keep_env_step(df):
-    """The Dockerfile plus the shared SSH-environment step, as the final step (after every ENV). If the Dockerfile
-    switches USER, the step runs as root and the last USER is restored."""
-    users = re.findall(r"^USER\s+(\S+)", df, re.M)
+    """The Dockerfile plus the shared SSH-environment step, as the final step (after every ENV). If the final stage
+    switches USER, the step runs as root and that USER is restored. Build ARG names (not also set by ENV) are passed
+    to the script so build arguments never reach SSH sessions."""
+    last = df[max((m.start() for m in re.finditer(r"^FROM\s", df, re.M)), default=0):]   # the final stage only
+    users = re.findall(r"^USER\s+(\S+)", last, re.M)
+    args = set(re.findall(r"^ARG\s+([A-Za-z_][A-Za-z0-9_]*)", df, re.M))
+    envs = set(re.findall(r"^ENV\s+([A-Za-z_][A-Za-z0-9_]*)", df, re.M))
+    skip = " ".join(sorted(args - envs))   # build arguments are not the image's environment
     step = ["", "# Added by tools/release.py to every image: keep this image's environment in SSH sessions."]
     if users:
         step.append("USER root")
-    step += [f"COPY {KEEP_ENV_NAME} /tmp/{KEEP_ENV_NAME}", f"RUN sh /tmp/{KEEP_ENV_NAME} && rm -f /tmp/{KEEP_ENV_NAME}"]
+    run = f"sh /tmp/{KEEP_ENV_NAME}" if not skip else f'RC_KEEP_ENV_SKIP="{skip}" sh /tmp/{KEEP_ENV_NAME}'
+    step += [f"COPY {KEEP_ENV_NAME} /tmp/{KEEP_ENV_NAME}", f"RUN {run} && rm -f /tmp/{KEEP_ENV_NAME}"]
     if users:
         step.append(f"USER {users[-1]}")
     return df.rstrip("\n") + "\n" + "\n".join(step) + "\n"
