@@ -15,10 +15,24 @@ sys.path.insert(0, os.path.dirname(__file__))
 import harbor  # noqa: E402
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-PULL = "10.5.10.12:1808/radeon-cloud-global"
-PUSH = "36.150.116.202:1808/radeon-cloud-global"
+# Registries: not written in this public repository. CI passes them as secrets, each "<host:port>/<project>":
+# RC_REGISTRY_PULL is what cluster nodes pull from, RC_REGISTRY_PUSH is where builds push. Anything that builds, pushes,
+# smokes or tags fails with a clear message when they're unset; --dry-run (validation only, no registry contact) uses a
+# non-routable placeholder so pull requests from forks, which get no secrets, can still be validated.
+PULL = os.environ.get("RC_REGISTRY_PULL", "")
+PUSH = os.environ.get("RC_REGISTRY_PUSH", "")
+DRY_RUN_REGISTRY = "registry.invalid/radeon-cloud-global"
+
+
+def require_registry():
+    if not (PULL and PUSH):
+        raise SystemExit("RC_REGISTRY_PULL / RC_REGISTRY_PUSH are not set: the registry addresses come from CI secrets")
+
+
+def registry_hosts():
+    return [r.split("/")[0] for r in (PULL, PUSH) if r]
 BUILD_NS = "amd-oneclick-ci-runners"
-KANIKO = PULL + "/kaniko-project/executor@sha256:8a4f9af8ef55ef8bfaf4cfd7b15dc956609e14a4402efefd5fb2e49a0c06e2c8"  # v1.23.2
+KANIKO_PATH = "/kaniko-project/executor@sha256:8a4f9af8ef55ef8bfaf4cfd7b15dc956609e14a4402efefd5fb2e49a0c06e2c8"  # v1.23.2
 PIP_INDEX = "https://mirrors.aliyun.com/pypi/simple/"   # pypi.org is not reachable from the cluster
 HF_ENDPOINT = "https://hf-mirror.com"                   # huggingface.co is not reachable either
 HF_CACHE_HOSTPATH = "/nvme0/data/rc-images-ci-hf-cache"   # on the CI node (amd-oneclick.io/workload-ci=enabled)
@@ -66,7 +80,8 @@ def parse(image):
     if not frm:
         raise SystemExit(f"{image}: the Dockerfile needs 'FROM <registry>/<repo>:<tag>@sha256:<digest>' "
                          "(the public upstream, e.g. docker.io/rocm/pytorch:<tag>@sha256:...)")
-    if frm["registry"].startswith(("10.5.10.12", "36.150.116.202")) or len(FROM_RE.findall(df)) > 1:
+    require_registry()
+    if frm["registry"] in registry_hosts() or len(FROM_RE.findall(df)) > 1:
         raise SystemExit(f"{image}: FROM must name the public upstream once, not our Harbor (the tooling mirrors it)")
     cfg = {}
     for l in open(os.path.join(d, "image.yaml")):
@@ -204,7 +219,7 @@ def build(m):
            "spec": {"backoffLimit": 0, "activeDeadlineSeconds": BUILD_DEADLINE_S, "ttlSecondsAfterFinished": 3600, "template": {
                "metadata": {"labels": labels},
                "spec": {"restartPolicy": "Never", "automountServiceAccountToken": False,
-                        "containers": [{"name": "kaniko", "image": KANIKO, "args": [
+                        "containers": [{"name": "kaniko", "image": PULL + KANIKO_PATH, "args": [
                             "--context=tar:///context/context.tar.gz", "--dockerfile=Dockerfile",
                             f"--destination={PUSH}/{repo}:{tag}", "--digest-file=/dev/termination-log",
                             f"--build-arg=PIP_INDEX_URL={PIP_INDEX}",
@@ -223,15 +238,21 @@ def build(m):
     try:
         # Stop polling 120 s before the Job's own deadline (as smoke() does): at the deadline Kubernetes deletes the
         # pod, and with it the build log printed below (11-26: images#50's timed-out build left no log).
-        ok, deadline = False, time.time() + BUILD_DEADLINE_S - 120
+        ok, deadline, last_log = False, time.time() + BUILD_DEADLINE_S - 120, ""
         while time.time() < deadline:
             st = json.loads(sh("kubectl", "-n", BUILD_NS, "get", "job", name, "-o", "json")).get("status", {})
             if st.get("succeeded"):
                 ok = True; break
             if st.get("failed"):
                 break
+            # Keep the latest log tail while the pod exists: a job that hits its deadline has its pod deleted at once,
+            # and the fetch below would then come back empty (11-25/26: #43 comfyui, #50 ollama). Printed only on failure.
+            last_log = sh("kubectl", "-n", BUILD_NS, "logs", f"job/{name}", "--tail=60", check=False) or last_log
             time.sleep(30)
-        print(sh("kubectl", "-n", BUILD_NS, "logs", f"job/{name}", "--tail=60", check=False))
+        final_log = sh("kubectl", "-n", BUILD_NS, "logs", f"job/{name}", "--tail=60", check=False)
+        print(final_log)
+        if not ok and not final_log.strip() and last_log.strip():
+            print(f"build: the pod is gone; last log captured while it ran:\n{last_log}")
         if not ok:
             print(sh("kubectl", "-n", BUILD_NS, "get", "pods", "-l", f"job-name={name}", "-o", "wide", check=False))
             if time.time() >= deadline:
@@ -406,6 +427,10 @@ def main():
     ap.add_argument("--smoke-only", action="store_true", help="PR check: mirror + smoke, no rc-current move, no catalog")
     ap.add_argument("--probe", action="store_true", help="only print the versions of an existing digest (no GPU)")
     a = ap.parse_args()
+    global PULL, PUSH
+    if a.dry_run and not (PULL and PUSH):   # validation only: nothing contacts a registry
+        PULL = PULL or DRY_RUN_REGISTRY
+        PUSH = PUSH or DRY_RUN_REGISTRY
     # GitHub cancels a run with SIGTERM. Exit normally on it, so the finally blocks delete this run's Jobs.
     signal.signal(signal.SIGTERM, lambda *_: sys.exit(143))
     if not a.dry_run:

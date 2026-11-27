@@ -1,6 +1,6 @@
 # Release settings for this image (read by tools/release.py and tools/upstream_check.py).
 name: vllm
-rc_repo: rc/vllm               # Harbor: 10.5.10.12:1808/radeon-cloud-global/rc/vllm:rc-current is what the catalog stable row tracks
+rc_repo: rc/vllm               # Harbor: <pull registry>/rc/vllm:rc-current is what the catalog stable row tracks
 catalog_row: "vLLM · 稳定"           # the stable catalog row only; template rows are never touched
 smoke: vllm                 # which smoke profile images/vllm/smoke.sh runs (see README)
 upstream:            # the registry/repo come from the Dockerfile's FROM line
