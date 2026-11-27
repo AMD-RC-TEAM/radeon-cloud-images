@@ -24,9 +24,9 @@ RUN sh /tmp/add_jupyterlab.sh && rm -f /tmp/add_jupyterlab.sh && \
 # It was copied there from radeon-engine4's artifact server after checking its SHA256SUMS; the sha is checked again here.
 # Written without a registry, like FROM: tools/release.py points `rc-artifacts/...` at our Harbor at build time
 # (repo README: "Build inputs from Harbor"). To update: push the new bundle the same way, change these three lines, re-measure.
-ARG STRATA_BUNDLE_VERSION=v3.1
-ARG STRATA_BUNDLE_SHA256=03bfd8a1ee3d7aa92df8f97d0c02d4fffc3c34ee43dddef9995d767b181e3563
-COPY --from=rc-artifacts/strata-bundle@sha256:a6f1be5a972dd27c0f1d790531147d4ca9ce96ea8f87a1c56a41b560f651cc74 /bundle/context.tgz /tmp/strata/context.tgz
+ARG STRATA_BUNDLE_VERSION=v3.4
+ARG STRATA_BUNDLE_SHA256=1c82ef01d71146497c56f6eea85c6984a9d463e87683bcbb2e32695d292c7fc2
+COPY --from=rc-artifacts/strata-bundle@sha256:1425da2efda7fecb87a8861030de73d7186aff08bdbda9ec67fcc59dacbf711d /bundle/context.tgz /tmp/strata/context.tgz
 COPY add_strata.sh /tmp/add_strata.sh
 RUN sh /tmp/add_strata.sh && rm -f /tmp/add_strata.sh
 

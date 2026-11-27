@@ -47,7 +47,7 @@ box(49, 17, 26, 14, "rc_strata_autostart", ["Jupyter extension in the image", "s
 box(81, 34, 46, 14, "Strata engine  ·  127.0.0.1:8080 (OpenAI API)", ["not exposed: reachable only inside the pod / via the proxy",
     "GPU: all 24,576 experts resident in VRAM (40 GB)", "28.8 GB n-gram table: direct NVMe reads, no page cache"])
 box(81, 17, 46, 14, "Model mount  /models/qwen38-flash-next-iq3xxs", ["78.2 GB, read-only hostPath on node-local NVMe",
-    "staged by ops on 3 W7900D nodes, sha256-checked", "template's pool label exists only on those nodes"], edge=AQUA)
+    "staged by ops on 3 W7900D nodes, sha256-checked", "on GT in a v1/ subdir; the autostart finds it"], edge=AQUA)
 arrow(42.3, 42.5, 48.7, 42.5)
 arrow(75.3, 41, 80.7, 41, "HTTP")
 arrow(62, 31.2, 62, 33.7, "", style="-|>")
@@ -65,11 +65,11 @@ box(1, 2, 40, 22, "Image build (CI, merge = release)", [
     "   autostart extension (no notebooks: the template adds them)"], edge=ORANGE)
 arrow(41.3, 13, 46.7, 22)
 
-# Memory budget (measured in the instance shape, s-060, 11-26)
+# Memory budget (measured in the instance shape, bundle v3.4, s-055/s-056, 11-27)
 bx = fig.add_axes([0.06, 0.07, 0.88, 0.17]); bx.set_facecolor(SURFACE)
-segs = [("engine working memory\n~13-15 GiB, not reclaimable", 14.0, BLUE),
-        ("conversation cache\n≤12 GiB (bundle v3+)", 12.0, ORANGE),
-        ("page cache for the model files\nthe kernel reclaims it at the limit", 55.0 - 26.0, AQUA)]
+segs = [("engine working memory\n~18 GiB incl. 8.9 GiB pinned", 18.0, BLUE),
+        ("conversation cache (≤24 GiB)\npeak with engine: 38.2 GiB", 20.2, ORANGE),
+        ("page cache for the model files\nthe kernel reclaims it at the limit", 55.0 - 38.2, AQUA)]
 left = 0
 for label, w, c in segs:
     bx.barh(0, w - 0.25, left=left, height=0.55, color=c, edgecolor=SURFACE, linewidth=2)
@@ -81,7 +81,7 @@ bx.set_xticks(range(0, 56, 5)); bx.tick_params(axis="x", colors=INK2, labelsize=
 for s in ("top", "right", "left"):
     bx.spines[s].set_visible(False)
 bx.spines["bottom"].set_color(GRID)
-bx.set_title("Memory budget inside the 55 GiB pod, measured on s-060: 0 OOM kills.  1 / 2 users: bundle v2.1 ~70 / ~79 tok/s, bundle v3.1 ~78 / ~90 tok/s",
+bx.set_title("Memory budget inside the 55 GiB pod, bundle v3.4 with a full conversation cache: 0 OOM kills.  1 / 2 users: ~80 / ~100 tok/s",
              fontsize=10.5, color=INK, loc="left", pad=16, fontweight="bold")
 fig.savefig(sys.argv[1], facecolor=SURFACE)
 print("wrote", sys.argv[1])
