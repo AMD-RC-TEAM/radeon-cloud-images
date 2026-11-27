@@ -44,6 +44,4 @@ ENV B0_MODEL=/models/qwen38-flash-next-iq3xxs B0_APP=/opt/strata/control B0_PY=/
     B0_HOST=127.0.0.1 B0_PORT=8080 B0_LOG=/tmp/b0-logs STRATA_ALLOWED_HOSTS="*" \
     HSA_DISABLE_COREDUMP_ON_EXCEPTION=1 SHELL=/bin/bash
 
-# Keep the image toolchain environment in SSH sessions; see keep_image_env.sh. Last step: after every ENV.
-COPY keep_image_env.sh /tmp/keep_image_env.sh
-RUN sh /tmp/keep_image_env.sh && rm -f /tmp/keep_image_env.sh
+# SSH sessions keep this image's environment: tools/release.py adds that step to every image (tools/keep_image_env.sh).

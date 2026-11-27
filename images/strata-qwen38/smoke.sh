@@ -8,7 +8,6 @@ set -euo pipefail
 . "$(dirname "$0")/smoke_lib.sh"
 jupyterlab_fast_path
 openssh_baked
-ssh_keeps_image_env
 no_in_image_welcome
 grep -m1 -E 'gfx1100' <<<"$(rocminfo)"
 test "$(readlink -f /opt/b0/current)" = /opt/b0/v3.4
