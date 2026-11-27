@@ -1,5 +1,5 @@
 # The public upstream image, pinned by digest; the pipeline mirrors it into Harbor and builds/smokes from there.
-FROM docker.io/rocm/pytorch:rocm10.1.0_ubuntu24.04_py3.12_pytorch_release_2.14.0@sha256:099f59a3bee9c436f5cc57db6bc6076fdeda579c57e9e22ae40f856d5905b3e4
+FROM docker.io/rocm/pytorch:rocm10.2.0_ubuntu24.04_py3.12_pytorch_release_2.15.0@sha256:fe66c7b7b2d746d028471685eab44b399c8a31b89a66bf5ca6c6473cd5432fb1
 
 # The build sets this to a PyPI mirror reachable from the build cluster; it is not kept in the image.
 ARG PIP_INDEX_URL
