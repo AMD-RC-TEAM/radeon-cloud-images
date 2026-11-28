@@ -65,7 +65,7 @@ box(1, 2, 40, 22, "Image build (CI, merge = release)", [
     "   autostart extension (no notebooks: the template adds them)"], edge=ORANGE)
 arrow(41.3, 13, 46.7, 22)
 
-# Memory budget (measured in the instance shape, bundle v3.4, s-055/s-056, 11-27)
+# Memory budget (measured in the instance shape, bundle v3.5.1, s-055, 11-28)
 bx = fig.add_axes([0.06, 0.07, 0.88, 0.17]); bx.set_facecolor(SURFACE)
 segs = [("engine working memory\n~18 GiB incl. 8.9 GiB pinned", 18.0, BLUE),
         ("conversation cache (≤24 GiB)\npeak with engine: 38.2 GiB", 20.2, ORANGE),
@@ -81,7 +81,7 @@ bx.set_xticks(range(0, 56, 5)); bx.tick_params(axis="x", colors=INK2, labelsize=
 for s in ("top", "right", "left"):
     bx.spines[s].set_visible(False)
 bx.spines["bottom"].set_color(GRID)
-bx.set_title("Memory budget inside the 55 GiB pod, bundle v3.4 with a full conversation cache: 0 OOM kills.  1 / 2 users: ~80 / ~100 tok/s",
+bx.set_title("Memory budget inside the 55 GiB pod, bundle v3.5.1 with a full conversation cache: 0 OOM kills.  1 / 2 users: ~84 / ~104 tok/s",
              fontsize=10.5, color=INK, loc="left", pad=16, fontweight="bold")
 fig.savefig(sys.argv[1], facecolor=SURFACE)
 print("wrote", sys.argv[1])
