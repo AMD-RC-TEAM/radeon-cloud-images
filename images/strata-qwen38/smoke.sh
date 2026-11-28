@@ -10,7 +10,7 @@ jupyterlab_fast_path
 openssh_baked
 no_in_image_welcome
 grep -m1 -E 'gfx1100' <<<"$(rocminfo)"
-test "$(readlink -f /opt/b0/current)" = /opt/b0/v3.4
+test "$(readlink -f /opt/b0/current)" = /opt/b0/v3.5.1
 ! ldd /opt/b0/current/bin/strata | grep "not found"
 # The notebook comes from the template's repository clone, not from the image (as for the workshop images).
 test ! -e /opt/strata-quickstart
